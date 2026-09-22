@@ -1,0 +1,17 @@
+const fs = require('node:fs'), vm = require('node:vm'), path = require('node:path'), assert = require('node:assert/strict');
+const scope = vm.createContext({});
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'countdown.js'), 'utf8'), scope);
+const fighters = [{ x: 100, y: 200, speed: 200, vx: 120, vy: 160 }, { x: 500, y: 450, speed: 200, vx: -200, vy: 0 }];
+const c = new scope.ArenaCountdown(fighters);
+assert.equal(c.number, 3);
+const first = c.angle(0); c.update(.5); assert.notEqual(c.angle(0), first);
+c.update(.5); assert.equal(c.number, 2);
+c.paused = true; const stopped = c.angle(0); c.update(2); assert.equal(c.angle(0), stopped); assert.equal(c.elapsed, 1);
+c.paused = false; c.update(1); assert.equal(c.number, 1);
+c.update(.7); const angles = fighters.map((_, i) => c.angle(i));
+c.update(.2); assert.equal(c.done, false); angles.forEach((a,i) => assert.equal(c.angle(i), a));
+c.update(.11); assert.equal(c.done, true);
+fighters.forEach((f,i) => { assert.ok(Math.abs(Math.hypot(f.vx,f.vy)-200)<1e-9); assert.ok(Math.abs(Math.sin(Math.atan2(f.vy,f.vx)-angles[i]))<1e-9); });
+assert.equal(fighters[0].x,100); assert.equal(fighters[1].y,450);
+c.update(5); assert.equal(c.elapsed,3);
+console.log('카운트다운 검사 통과: 3·2·1, 회전, 일시정지, 마지막 방향 고정, 실제 출발 방향·속도 일치, 위치 유지');
