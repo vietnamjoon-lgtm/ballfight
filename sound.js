@@ -121,7 +121,7 @@
       } else if (type === 'breadEat') {
         this.playOneShot('breadEat', .8);
       } else if (type === 'awaken') {
-        this.playClip('awaken', .8, 0, 2.3);
+        this.playClip('awaken', .8, 0, 4.4);
       } else if (type === 'berserkSlam') {
         this.playClip('berserkSlam', .9, .58, .45);
       }
