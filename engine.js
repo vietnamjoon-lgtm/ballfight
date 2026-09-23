@@ -158,7 +158,7 @@
       if (!(dt > 0 && dt <= 1 / 60)) throw Error('물리 계산은 1/60초 이하 간격으로 실행하세요.');
       this.time += dt; this.contactTimer = Math.max(0, this.contactTimer - dt);
       for (const f of this.fighters) {
-        f.flash = Math.max(0, f.flash - dt); f.shieldTime -= dt; if (f.shieldTime <= 0) f.shield = 0;
+        f.flash = Math.max(0, f.flash - dt); f.shieldTime -= dt; if (f.shieldTime <= 1e-8) { f.shieldTime = 0; f.shield = 0; }
         if (!f.rooted) f.facing += (f.spin + IDLE_SPIN) * dt; f.spin *= Math.max(0, 1 - dt * 3.2);
         if (f.dash) { f.dash.remaining -= dt; if (f.dash.remaining <= 0) { f.dash = null; this.normalize(f); } }
         for (const skill of f.skills) {
