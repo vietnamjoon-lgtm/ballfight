@@ -1323,15 +1323,17 @@
     params:{damage:22,askTime:2,actionTime:.9}
   };
 })(globalThis);
-/* BERSERK v2 */
-/* Survives on bread: while waiting for its own transform timer, it takes reduced damage and heals by eating
-   bread that drops on the floor (Minecraft-style — a few quick bites with a chomp sound before the heal
-   lands). At the configured elapsed time, regardless of HP, it "awakens" once: contact damage spikes for
-   good, damage reduction drops away, and from then on it alternates rushing the opponent to headbutt and
-   pulling back, over and over. A one-time screen flash and expanding rings mark the moment it triggers. */
+/* BERSERK v3 */
+/* Three modes in a loop. 'survive': takes reduced damage and heals by eating bread that drops on the floor
+   (Minecraft-style bites). Once the timer runs out, 'cine': all bread is cleared, the fighter roots, glides
+   to the arena center while the arena shakes a little and a magic circle spins under it, and its body wraps
+   in bandages. 'berserk': for the rest of a fixed total window (which includes the cine time), it hammers
+   the opponent — charge in, slam for big damage with a fragment burst and a hard screen shake, retreat,
+   charge again. When the window runs out it reverts fully back to 'survive' and the cycle repeats. */
 (function(g){
   'use strict';
   const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
+  const CENTER=360, MOVE_DUR=.7, CINE_DUR=2;
   const breadBank=(api,self)=>api.shared('berserk-bread-'+self.slot,()=>({pieces:[],nextDrop:null,processedAt:-1,renderer:null}));
   const breadImage=typeof Image!=='undefined'&&g.ArenaMedia?new Image():null;
   if(breadImage) breadImage.src=g.ArenaMedia.bread;
@@ -1358,11 +1360,82 @@
     }
     ctx.restore();
   };
+  const drawMagicCircle=(ctx,self,t)=>{
+    const r=self.radius+22;
+    ctx.save();
+    ctx.translate(self.x,self.y);
+    ctx.globalAlpha=Math.min(1,t*3)*Math.max(0,1-Math.max(0,t-.8)/.2);
+    ctx.strokeStyle='#8b5cf6'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0,0,r-9,0,Math.PI*2); ctx.stroke();
+    ctx.rotate(t*6);
+    for(let i=0;i<12;i++){
+      const a=i/12*Math.PI*2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*(r-9),Math.sin(a)*(r-9));
+      ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+  const drawMummyWrap=(ctx,self,progress)=>{
+    const n=8, r=self.radius;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(self.x,self.y,r,0,Math.PI*2); ctx.clip();
+    ctx.translate(self.x,self.y);
+    const bandH=r*2/n;
+    ctx.strokeStyle='#12332c'; ctx.lineWidth=3; ctx.fillStyle='#3f9784';
+    for(let i=0;i<n;i++){
+      const bandProgress=Math.max(0,Math.min(1,progress*n-i));
+      if(bandProgress<=0) continue;
+      const y=-r+i*bandH;
+      ctx.save();
+      ctx.translate(0,y+bandH/2);
+      ctx.scale(bandProgress,1);
+      const rw=r*2+20;
+      ctx.beginPath(); ctx.roundRect(-rw/2,-bandH/2+2,rw,bandH-4,bandH/2-4); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    if(progress<.98) return;
+    ctx.save(); ctx.translate(self.x,self.y);
+    const ex=r*.4, ey=-r*.05, erx=r*.2, ery=r*.27;
+    ctx.fillStyle='#f2b73a'; ctx.strokeStyle='#12332c'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(-ex,ey,erx,ery,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(ex,ey,erx,ery,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#6fc4ff'; ctx.globalAlpha=.9;
+    ctx.beginPath();
+    ctx.moveTo(-ex-r*.06,ey+ery*.7);
+    ctx.quadraticCurveTo(-ex-r*.1,ey+ery*1.3,-ex-r*.02,ey+ery*1.5);
+    ctx.quadraticCurveTo(-ex+r*.03,ey+ery*1.4,-ex,ey+ery*.9);
+    ctx.closePath(); ctx.fill(); ctx.strokeStyle='#12332c'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.globalAlpha=1;
+    ctx.restore();
+  };
+  const spawnParticles=(api,e,x,y)=>{
+    for(let i=0;i<9;i++){
+      const a=api.random()*Math.PI*2, s=80+api.random()*160;
+      e.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.4+api.random()*.2,maxLife:.6,rot:api.random()*Math.PI*2,spin:(api.random()-.5)*10,color:api.random()<.5?'#b45309':'#78350f'});
+    }
+  };
+  const drawParticles=(ctx,particles)=>{
+    for(const p of particles){
+      ctx.save();
+      ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha=Math.max(0,Math.min(1,p.life/p.maxLife));
+      ctx.fillStyle=p.color;
+      ctx.beginPath();
+      ctx.moveTo(-4,-2); ctx.lineTo(4,-1); ctx.lineTo(2,4); ctx.lineTo(-3,3);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha=1;
+  };
 
   g.ArenaAbilities.berserk={
     label:'각성 폭주',
     trigger:'pickup',
-    description:'각성 전까지는 접촉 피해를 줄여주고, 바닥에 떨어지는 빵을 먹어 체력을 회복하며 버팁니다. 설정한 시간이 지나면 체력과 무관하게 딱 한 번 각성합니다. 각성하면 접촉 피해가 크게 늘고, 이후로는 상대에게 계속 돌진해 박치기하고 물러났다가 다시 돌진하기를 반복합니다. 발동 순간 화면이 한 번 번쩍입니다.',
+    description:'각성 전까지는 접촉 피해를 줄여주고, 바닥에 떨어지는 빵을 먹어 체력을 회복하며 버팁니다. 설정한 시간이 지나면 체력과 무관하게 각성합니다: 전장 중앙으로 이동하며 화면이 흔들리고 마법진과 함께 몸이 붕대로 감싸입니다. 이후 정해진 시간 동안 상대에게 계속 돌진해 큰 피해로 박치기하고 물러났다가 다시 돌진하기를 반복하며, 돌진할 때마다 화면이 크게 흔들리고 파편이 튑니다. 시간이 다 되면 다시 평화로운 상태로 돌아가고, 이 과정이 반복됩니다.',
     fields:{
       transformTime:field('각성까지 걸리는 시간 (초)',5,120,1,30),
       damageReduction:field('각성 전 피해 감소 (%)',0,90,5,40),
@@ -1370,7 +1443,8 @@
       breadCount:field('빵 최대 개수',1,6,1,3),
       breadInterval:field('빵이 떨어지는 간격 (초)',.5,10,.5,2),
       breadSize:field('빵 크기',10,70,1,34),
-      damageMultiplier:field('각성 후 접촉 피해 배율',1,10,.5,4),
+      awakenDuration:field('각성 지속 시간 (초, 변신 포함)',4,30,1,10),
+      berserkDamage:field('돌진 피해',10,150,5,80),
       chargeSpeed:field('돌진 속도',200,1400,10,850),
       retreatSpeed:field('후퇴 속도',100,800,10,300),
       cycleTime:field('돌진+후퇴 주기 (초)',.2,2,.1,.5)
@@ -1378,15 +1452,16 @@
     status(self,skill){
       const s=self.skillState[skill.id];
       if(!s) return null;
-      if(s.transformed) return {label:'각성!',progress:1};
+      if(s.mode==='cine') return {label:'변신 중',progress:1};
+      if(s.mode==='berserk') return {label:'각성!',progress:1};
       return {label:`각성까지 ${Math.max(0,Math.ceil(skill.params.transformTime-s.elapsed))}초`,progress:Math.min(1,s.elapsed/skill.params.transformTime)};
     },
     cast(api,self,target,p,skill){
-      self.skillState[skill.id]={elapsed:0,transformed:false};
-      api.effect('berserk',self,{...p,skillId:skill.id,elapsed:0,transformed:false,eating:null,phase:'charge',phaseTimer:0,flash:0},150);
+      self.skillState[skill.id]={elapsed:0,mode:'survive'};
+      api.effect('berserk',self,{...p,skillId:skill.id,mode:'survive',elapsed:0,awakenAge:0,eating:null,particles:[],phase:'charge',phaseTimer:0},1e9);
     },
     update(e,api,self,target,dt){
-      if(!e.transformed){
+      if(e.mode==='survive'){
         if(self.hp<=0||target.hp<=0) return;
         self.damageReduction=e.damageReduction/100;
         e.elapsed+=dt;
@@ -1431,56 +1506,89 @@
         }
 
         if(e.elapsed>=e.transformTime){
-          e.transformed=true; self.damageReduction=0; self.contactDamage*=e.damageMultiplier;
-          e.flash=.5; e.phase='charge'; e.phaseTimer=e.cycleTime/2;
+          e.mode='cine'; e.awakenAge=0;
+          self.rooted=true; self.damageReduction=0;
+          e.startX=self.x; e.startY=self.y;
+          bank.pieces=[]; e.eating=null;
+          api.sound('awaken');
         }
-        self.skillState[e.skillId]={elapsed:e.elapsed,transformed:e.transformed};
+        self.skillState[e.skillId]={elapsed:e.elapsed,mode:e.mode};
         return;
       }
-      e.flash=Math.max(0,e.flash-dt);
-      if(self.hp<=0||target.hp<=0) return;
-      e.phaseTimer-=dt;
-      if(e.phaseTimer<=0){
-        e.phase=e.phase==='charge'?'retreat':'charge';
-        e.phaseTimer=e.cycleTime/2;
+
+      e.awakenAge+=dt;
+      if(e.mode==='cine'){
+        api.shake(.1);
+        const t=Math.min(1,e.awakenAge/MOVE_DUR);
+        const ease=1-Math.pow(1-t,2);
+        self.x=e.startX+(CENTER-e.startX)*ease;
+        self.y=e.startY+(CENTER-e.startY)*ease;
+        if(e.awakenAge>=CINE_DUR){
+          e.mode='berserk'; self.rooted=false;
+          e.phase='charge'; e.phaseTimer=e.cycleTime/2; e.chargeHit=false;
+          e.lastSetVx=undefined; e.lastSetVy=undefined;
+        }
+      }else{
+        if(self.hp>0&&target.hp>0){
+          if(e.lastSetVx!==undefined){
+            if(e.lastSetVx&&Math.sign(self.vx)!==Math.sign(e.lastSetVx)) spawnParticles(api,e,self.x,self.y);
+            if(e.lastSetVy&&Math.sign(self.vy)!==Math.sign(e.lastSetVy)) spawnParticles(api,e,self.x,self.y);
+          }
+          e.phaseTimer-=dt;
+          if(e.phaseTimer<=0){
+            e.phase=e.phase==='charge'?'retreat':'charge';
+            e.phaseTimer=e.cycleTime/2;
+            if(e.phase==='charge') e.chargeHit=false;
+          }
+          const angle=Math.atan2(target.y-self.y,target.x-self.x);
+          const speed=e.phase==='charge'?e.chargeSpeed:e.retreatSpeed;
+          const dir=e.phase==='charge'?1:-1;
+          self.vx=Math.cos(angle)*speed*dir; self.vy=Math.sin(angle)*speed*dir;
+          e.lastSetVx=self.vx; e.lastSetVy=self.vy;
+          if(e.phase==='charge'&&!e.chargeHit){
+            const dist=Math.hypot(target.x-self.x,target.y-self.y);
+            if(dist<self.radius+target.radius+2){
+              api.explosion(target,e.berserkDamage,self);
+              api.sound('berserkSlam');
+              spawnParticles(api,e,target.x,target.y);
+              e.chargeHit=true;
+            }
+          }
+        }
+        if(e.awakenAge>=e.awakenDuration){
+          e.mode='survive'; e.elapsed=0; e.awakenAge=0;
+          self.damageReduction=e.damageReduction/100;
+        }
       }
-      const angle=Math.atan2(target.y-self.y,target.x-self.x);
-      const speed=e.phase==='charge'?e.chargeSpeed:e.retreatSpeed;
-      const dir=e.phase==='charge'?1:-1;
-      self.vx=Math.cos(angle)*speed*dir; self.vy=Math.sin(angle)*speed*dir;
+      for(const p of e.particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt; p.rot+=p.spin*dt; }
+      e.particles=e.particles.filter(p=>p.life>0);
+      self.skillState[e.skillId]={elapsed:e.elapsed,mode:e.mode};
     },
     draw(ctx,e,self){
-      if(e.bank&&e.bank.renderer===self.slot){
-        for(const p of e.bank.pieces) drawBread(ctx,p.x,p.y,1,-.25,e.breadSize);
-      }
-      if(e.eating){
-        const scale=1-e.eating.bites*.3;
-        const t=.5-e.eating.timer;
-        const wobble=Math.sin(t*50)*.5-.25;
-        const jx=Math.sin(t*70)*3, jy=Math.cos(t*65)*3;
-        ctx.globalAlpha=Math.max(.15,scale);
-        drawBread(ctx,self.x+jx,self.y-self.radius-22+jy,Math.max(.3,scale),wobble,e.breadSize);
-        ctx.globalAlpha=1;
-      }
-      if(!e.transformed) return;
-      if(e.flash>0){
-        const t=1-e.flash/.5;
-        ctx.save();
-        ctx.globalAlpha=e.flash/.5*.5;
-        ctx.fillStyle='#ff3b5c'; ctx.fillRect(0,0,720,720);
-        ctx.strokeStyle='#ff3b5c'; ctx.lineWidth=3;
-        for(let i=0;i<4;i++){
-          const r=20+t*260+i*24;
-          ctx.globalAlpha=Math.max(0,(e.flash/.5)*(1-i*.2));
-          ctx.beginPath(); ctx.arc(self.x,self.y,r,0,Math.PI*2); ctx.stroke();
+      if(e.mode==='survive'){
+        if(e.bank&&e.bank.renderer===self.slot){
+          for(const p of e.bank.pieces) drawBread(ctx,p.x,p.y,1,-.25,e.breadSize);
         }
-        ctx.restore();
+        if(e.eating){
+          const scale=1-e.eating.bites*.3;
+          const t=.5-e.eating.timer;
+          const wobble=Math.sin(t*50)*.5-.25;
+          const jx=Math.sin(t*70)*3, jy=Math.cos(t*65)*3;
+          ctx.globalAlpha=Math.max(.15,scale);
+          drawBread(ctx,self.x+jx,self.y-self.radius-22+jy,Math.max(.3,scale),wobble,e.breadSize);
+          ctx.globalAlpha=1;
+        }
+        return;
       }
-      ctx.save();
-      ctx.strokeStyle='#ff3b5c'; ctx.lineWidth=3;
-      ctx.globalAlpha=.75+Math.sin(e.phaseTimer*30)*.15;
-      ctx.beginPath(); ctx.arc(self.x,self.y,self.radius+5,0,Math.PI*2); ctx.stroke();
-      ctx.restore();
+      if(e.mode==='cine'){
+        const t=Math.min(1,e.awakenAge/CINE_DUR);
+        drawMagicCircle(ctx,self,t);
+        const wrapT=Math.max(0,Math.min(1,(e.awakenAge-MOVE_DUR*.5)/(CINE_DUR-MOVE_DUR*.5)));
+        drawMummyWrap(ctx,self,wrapT);
+      }else{
+        drawMummyWrap(ctx,self,1);
+      }
+      if(e.particles?.length) drawParticles(ctx,e.particles);
     }
   };
 
@@ -1489,6 +1597,66 @@
     name:'각성 폭주',
     type:'berserk',
     cooldown:1,
-    params:{transformTime:30,damageReduction:40,breadHeal:15,breadCount:3,breadInterval:2,breadSize:34,damageMultiplier:4,chargeSpeed:850,retreatSpeed:300,cycleTime:.5}
+    params:{transformTime:30,damageReduction:40,breadHeal:15,breadCount:3,breadInterval:2,breadSize:34,awakenDuration:10,berserkDamage:80,chargeSpeed:850,retreatSpeed:300,cycleTime:.5}
+  };
+})(globalThis);
+/* SPIKE GUARD v1 */
+/* Curls up in place for a short time: damage taken drops sharply, and a ring of spikes forms right around
+   the character's own body (not a separate creature). Anyone touching the spikes while it's up gets stabbed
+   for extra reflected damage on top of normal contact damage. */
+(function(g){
+  'use strict';
+  const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
+
+  g.ArenaAbilities.spikeGuard={
+    label:'가시 갑옷',
+    description:'잠깐 동안 몸을 웅크려 주위를 가시로 완전히 둘러쌉니다. 그동안 받는 피해가 크게 줄고, 몸에 닿은 상대는 가시에 찔려 반사 피해를 추가로 입습니다.',
+    fields:{
+      duration:field('지속 시간 (초)',.5,10,.5,4),
+      damageReduction:field('피해 감소 (%)',0,90,5,50),
+      thornDamage:field('가시 반사 피해',1,60,1,15)
+    },
+    cast(api,self,target,p){
+      self.damageReduction=p.damageReduction/100;
+      self.contactDamage+=p.thornDamage;
+      api.effect('spikeGuard',self,{...p,age:0,reverted:false},p.duration+.15);
+    },
+    update(e,api,self,target,dt){
+      e.age+=dt;
+      if(!e.reverted&&(e.age>e.duration||self.hp<=0)){
+        self.damageReduction=0;
+        self.contactDamage-=e.thornDamage;
+        e.reverted=true;
+      }
+    },
+    draw(ctx,e,self){
+      if(e.age>e.duration) return;
+      const n=10, inner=self.radius-2, outer=self.radius+14;
+      ctx.save();
+      ctx.translate(self.x,self.y);
+      ctx.strokeStyle='#2c1c10'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(0,0,inner+3,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle='#5b3a22';
+      for(let i=0;i<n;i++){
+        ctx.save();
+        ctx.rotate(i/n*Math.PI*2);
+        ctx.beginPath();
+        ctx.moveTo(inner,-6);
+        ctx.lineTo(outer,0);
+        ctx.lineTo(inner,6);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  };
+
+  g.ArenaSpikeGuardPreset={
+    id:'pack_spike_guard_v1',
+    name:'가시 갑옷',
+    type:'spikeGuard',
+    cooldown:8,
+    params:{duration:4,damageReduction:50,thornDamage:15}
   };
 })(globalThis);
