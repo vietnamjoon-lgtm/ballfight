@@ -683,7 +683,7 @@ function mount(){
         ctx.globalAlpha=1;
       }
 
-      ctx.strokeStyle=f.shield>0?'#dfad27':
+      ctx.strokeStyle=f.shield>0?'#3fa9f5':
         battle.mode==='boss'&&f.slot===0?'#c12828':'#222';
       ctx.lineWidth=3;
       ctx.beginPath();
