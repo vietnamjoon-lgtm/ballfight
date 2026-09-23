@@ -1323,3 +1323,159 @@
     params:{damage:22,askTime:2,actionTime:.9}
   };
 })(globalThis);
+/* BERSERK v2 */
+/* Survives on bread: while waiting for its own transform timer, it takes reduced damage and heals by eating
+   bread that drops on the floor (Minecraft-style — a few quick bites with a chomp sound before the heal
+   lands). At the configured elapsed time, regardless of HP, it "awakens" once: contact damage spikes for
+   good, damage reduction drops away, and from then on it alternates rushing the opponent to headbutt and
+   pulling back, over and over. A one-time screen flash and expanding rings mark the moment it triggers. */
+(function(g){
+  'use strict';
+  const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
+  const breadBank=(api,self)=>api.shared('berserk-bread-'+self.slot,()=>({pieces:[],nextDrop:null,processedAt:-1,renderer:null}));
+  const drawBread=(ctx,x,y,scale)=>{
+    ctx.save(); ctx.translate(x,y); ctx.rotate(-.25); ctx.scale(scale,scale);
+    ctx.lineWidth=2.5; ctx.strokeStyle='#1a1a1a'; ctx.fillStyle='#e08a2e';
+    ctx.beginPath();
+    ctx.moveTo(-17,4);
+    ctx.quadraticCurveTo(-18,-8,-7,-10);
+    ctx.quadraticCurveTo(4,-13,13,-8);
+    ctx.quadraticCurveTo(20,-4,17,3);
+    ctx.quadraticCurveTo(13,10,3,10);
+    ctx.quadraticCurveTo(-9,11,-17,4);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-9,-5); ctx.quadraticCurveTo(-7,1,-10,6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(1,-8); ctx.quadraticCurveTo(3,-1,0,6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(10,-8); ctx.quadraticCurveTo(12,-2,9,4); ctx.stroke();
+    ctx.restore();
+  };
+
+  g.ArenaAbilities.berserk={
+    label:'각성 폭주',
+    trigger:'pickup',
+    description:'각성 전까지는 접촉 피해를 줄여주고, 바닥에 떨어지는 빵을 먹어 체력을 회복하며 버팁니다. 설정한 시간이 지나면 체력과 무관하게 딱 한 번 각성합니다. 각성하면 접촉 피해가 크게 늘고, 이후로는 상대에게 계속 돌진해 박치기하고 물러났다가 다시 돌진하기를 반복합니다. 발동 순간 화면이 한 번 번쩍입니다.',
+    fields:{
+      transformTime:field('각성까지 걸리는 시간 (초)',5,120,1,30),
+      damageReduction:field('각성 전 피해 감소 (%)',0,90,5,40),
+      breadHeal:field('빵 회복량',1,100,1,15),
+      breadCount:field('빵 최대 개수',1,6,1,3),
+      breadInterval:field('빵이 떨어지는 간격 (초)',.5,10,.5,2),
+      damageMultiplier:field('각성 후 접촉 피해 배율',1,10,.5,4),
+      chargeSpeed:field('돌진 속도',200,1400,10,850),
+      retreatSpeed:field('후퇴 속도',100,800,10,300),
+      cycleTime:field('돌진+후퇴 주기 (초)',.2,2,.1,.5)
+    },
+    status(self,skill){
+      const s=self.skillState[skill.id];
+      if(!s) return null;
+      if(s.transformed) return {label:'각성!',progress:1};
+      return {label:`각성까지 ${Math.max(0,Math.ceil(skill.params.transformTime-s.elapsed))}초`,progress:Math.min(1,s.elapsed/skill.params.transformTime)};
+    },
+    cast(api,self,target,p,skill){
+      self.skillState[skill.id]={elapsed:0,transformed:false};
+      api.effect('berserk',self,{...p,skillId:skill.id,elapsed:0,transformed:false,eating:null,phase:'charge',phaseTimer:0,flash:0},150);
+    },
+    update(e,api,self,target,dt){
+      if(!e.transformed){
+        if(self.hp<=0||target.hp<=0) return;
+        self.damageReduction=e.damageReduction/100;
+        e.elapsed+=dt;
+
+        const now=api.now(), bank=breadBank(api,self); e.bank=bank;
+        if(bank.renderer===null) bank.renderer=self.slot;
+        if(bank.processedAt!==now){
+          bank.processedAt=now;
+          bank.pieces=bank.pieces.filter(p=>p.expires>now);
+          if(bank.nextDrop===null) bank.nextDrop=now-dt+e.breadInterval;
+          if(now+1e-8>=bank.nextDrop){
+            bank.nextDrop+=e.breadInterval;
+            if(bank.pieces.length<e.breadCount){
+              const clear=p=>bank.pieces.every(c=>Math.hypot(c.x-p.x,c.y-p.y)>=90)
+                &&[self,target].every(f=>Math.hypot(f.x-p.x,f.y-p.y)>=f.radius+70);
+              let point=null;
+              for(let i=0;i<48;i++){
+                const candidate={x:55+api.random()*610,y:55+api.random()*610};
+                if(clear(candidate)){point=candidate;break;}
+              }
+              if(!point) for(let i=0;i<49;i++){
+                const candidate={x:55+(i%7)*100,y:55+Math.floor(i/7)*100};
+                if(clear(candidate)){point=candidate;break;}
+              }
+              if(point) bank.pieces.push({...point,ready:now+.35,expires:now+24});
+            }
+          }
+        }
+        if(!e.eating){
+          const hit=bank.pieces.find(p=>now>=p.ready&&Math.hypot(self.x-p.x,self.y-p.y)<=self.radius+16);
+          if(hit){
+            bank.pieces=bank.pieces.filter(p=>p!==hit);
+            api.heal(self,e.breadHeal); api.sound('breadEat');
+            e.eating={bites:0,timer:.5};
+          }
+        }else{
+          e.eating.timer-=dt;
+          if(e.eating.timer<=0){
+            e.eating.bites++;
+            if(e.eating.bites>=3) e.eating=null; else e.eating.timer=.5;
+          }
+        }
+
+        if(e.elapsed>=e.transformTime){
+          e.transformed=true; self.damageReduction=0; self.contactDamage*=e.damageMultiplier;
+          e.flash=.5; e.phase='charge'; e.phaseTimer=e.cycleTime/2;
+        }
+        self.skillState[e.skillId]={elapsed:e.elapsed,transformed:e.transformed};
+        return;
+      }
+      e.flash=Math.max(0,e.flash-dt);
+      if(self.hp<=0||target.hp<=0) return;
+      e.phaseTimer-=dt;
+      if(e.phaseTimer<=0){
+        e.phase=e.phase==='charge'?'retreat':'charge';
+        e.phaseTimer=e.cycleTime/2;
+      }
+      const angle=Math.atan2(target.y-self.y,target.x-self.x);
+      const speed=e.phase==='charge'?e.chargeSpeed:e.retreatSpeed;
+      const dir=e.phase==='charge'?1:-1;
+      self.vx=Math.cos(angle)*speed*dir; self.vy=Math.sin(angle)*speed*dir;
+    },
+    draw(ctx,e,self){
+      if(e.bank&&e.bank.renderer===self.slot){
+        for(const p of e.bank.pieces) drawBread(ctx,p.x,p.y,1);
+      }
+      if(e.eating){
+        const scale=1-e.eating.bites*.3;
+        ctx.globalAlpha=Math.max(.15,scale);
+        drawBread(ctx,self.x,self.y-self.radius-22,Math.max(.3,scale));
+        ctx.globalAlpha=1;
+      }
+      if(!e.transformed) return;
+      if(e.flash>0){
+        const t=1-e.flash/.5;
+        ctx.save();
+        ctx.globalAlpha=e.flash/.5*.5;
+        ctx.fillStyle='#ff3b5c'; ctx.fillRect(0,0,720,720);
+        ctx.strokeStyle='#ff3b5c'; ctx.lineWidth=3;
+        for(let i=0;i<4;i++){
+          const r=20+t*260+i*24;
+          ctx.globalAlpha=Math.max(0,(e.flash/.5)*(1-i*.2));
+          ctx.beginPath(); ctx.arc(self.x,self.y,r,0,Math.PI*2); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.strokeStyle='#ff3b5c'; ctx.lineWidth=3;
+      ctx.globalAlpha=.75+Math.sin(e.phaseTimer*30)*.15;
+      ctx.beginPath(); ctx.arc(self.x,self.y,self.radius+5,0,Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  g.ArenaBerserkPreset={
+    id:'pack_berserk_v1',
+    name:'각성 폭주',
+    type:'berserk',
+    cooldown:1,
+    params:{transformTime:30,damageReduction:40,breadHeal:15,breadCount:3,breadInterval:2,damageMultiplier:4,chargeSpeed:850,retreatSpeed:300,cycleTime:.5}
+  };
+})(globalThis);
