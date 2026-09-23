@@ -11,7 +11,7 @@ function setup(random) {
   b.start(); return { b, self, target };
 }
 function advance(b, n) { for (let i = 0; i < n; i++) b.step(1 / 120); }
-const params = copy(preset.params); // damage 22, askTime .6, actionTime .9
+const params = copy(preset.params); // damage 22, askTime 2, actionTime .9
 
 // Casting immediately roots the caster and shows the "asking" phase; nobody moves or takes damage yet.
 {
@@ -21,7 +21,7 @@ const params = copy(preset.params); // damage 22, askTime .6, actionTime .9
   assert.equal(b.effects[0].phase, 'ask');
   assert.equal(self.rooted, true);
   const hp = target.hp, sx = self.x, sy = self.y;
-  advance(b, 40); // well under askTime (.6s = 72 frames)
+  advance(b, 40); // well under askTime (2s = 240 frames)
   assert.equal(b.effects[0].phase, 'ask', '아직 물어보는 중');
   assert.equal(self.x, sx); assert.equal(self.y, sy);
   assert.equal(target.hp, hp, '결정 전에는 피해 없음');
@@ -32,11 +32,11 @@ const params = copy(preset.params); // damage 22, askTime .6, actionTime .9
   const { b, self, target } = setup(() => .1);
   types.askFight.cast(b.api, self, target, copy(params));
   const hp = target.hp, startX = self.x;
-  advance(b, 120); // past ask (72 frames) + the full approach (48 more), still mid-grab
+  advance(b, 280); // past ask (240 frames) + partway into the approach (40 more), still mid-grab
   assert.equal(b.effects[0].fight, true);
   assert.equal(target.rooted, true, '붙잡힌 상대는 못 움직임');
   assert.notEqual(self.x, startX, '상대에게 다가감');
-  advance(b, 110); // finish the sequence and let the container's own duration (216 frames) run out
+  advance(b, 110); // finish the sequence and let the container's own duration (384 frames) run out
   assert.equal(b.effects.length, 0, '시퀀스가 끝나면 효과 정리');
   assert.equal(self.rooted, false); assert.equal(target.rooted, false);
   assert.equal(target.hp, hp - params.damage, '얼굴 때리기는 정확히 한 번, 무조건 명중');
@@ -74,13 +74,13 @@ const drawCtx = new Proxy({}, { get: () => () => {} });
   const { b, self, target } = setup(() => .1);
   types.askFight.cast(b.api, self, target, copy(params));
   types.askFight.draw(drawCtx, b.effects[0], self);
-  advance(b, 200);
+  advance(b, 300);
   types.askFight.draw(drawCtx, b.effects[0], self);
 }
 {
   const { b, self, target } = setup(() => .9);
   types.askFight.cast(b.api, self, target, copy(params));
-  advance(b, 200);
+  advance(b, 300);
   types.askFight.draw(drawCtx, b.effects[0], self);
 }
 
