@@ -17,9 +17,14 @@ function drop(bank,b,f,count){for(let i=0;i<count;i++)bank.coins.push({x:f.x,y:f
  assert.equal(b.effects[0].missiles.length,0);assert.equal(self.skillState[preset.id].money,0);
  bank.coins=[];drop(bank,b,target,1);tick(b,1);assert.equal(bank.coins.length,1,'비보유자는 못 줍기');
  bank.coins=[];drop(bank,b,self,2);assert.equal(tick(b,1).length,0);assert.equal(self.skillState[preset.id].money,2);assert.equal(b.effects[0].missiles.length,0);
- drop(bank,b,self,1);assert.deepEqual(tick(b,1),[]); assert.equal(self.rooted,true); const stationary={x:self.x,y:self.y}; const chargeSounds=tick(b,480); assert.equal(chargeSounds.filter(x=>x==='remoteClick').length,1,'꺼내자마자 버튼을 누르는 소리'); assert.equal(chargeSounds.filter(x=>x==='missileLaunch').length,1); assert.equal(chargeSounds.filter(x=>x==='countdownTick').length,3,'3·2·1에 맞춰 정확히 3번'); assert.equal(self.x,stationary.x); assert.equal(self.y,stationary.y); assert.equal(self.rooted,false);assert.equal(self.skillState[preset.id].money,0);assert.equal(b.effects[0].missiles.length,1);
+ drop(bank,b,self,1);assert.deepEqual(tick(b,1),[]); assert.equal(self.rooted,true); assert.equal(self.shield,20,'무방비 상태인 동안 보호막 20'); const stationary={x:self.x,y:self.y}; const chargeSounds=tick(b,480); assert.equal(chargeSounds.filter(x=>x==='remoteClick').length,1,'꺼내자마자 버튼을 누르는 소리'); assert.equal(chargeSounds.filter(x=>x==='missileLaunch').length,1); assert.equal(chargeSounds.filter(x=>x==='countdownTick').length,3,'3·2·1에 맞춰 정확히 3번'); assert.equal(self.x,stationary.x); assert.equal(self.y,stationary.y); assert.equal(self.rooted,false);assert.equal(self.shield,0,'발사 후 보호막 소멸');assert.equal(self.skillState[preset.id].money,0);assert.equal(b.effects[0].missiles.length,1);
  const missile=b.effects[0].missiles[0],angle=missile.angle;assert.equal(missile.entered,false);assert.ok(missile.x<0||missile.x>720||missile.y<0||missile.y>720,'경기장 밖 출현');target.y+=65;tick(b,1);assert.notEqual(missile.angle,angle,'움직인 적 방향으로 선회');
  const sounds=tick(b,300);assert.equal(sounds.filter(x=>x==='missileExplosion').length,1);assert.equal(target.hp,target.maxHp-55);assert.equal(b.impacts[0].kind,'explosion');assert.equal(b.effects[0].missiles.length,0);
+}
+{
+ const {b,self,target,bank}=setup();drop(bank,b,self,3);tick(b,1);assert.equal(self.rooted,true);assert.equal(self.shield,20);
+ const hpBefore=self.hp;b.api.damage(self,15,target);assert.equal(self.hp,hpBefore,'보호막이 15를 전부 흡수');assert.equal(self.shield,5,'남은 보호막 5');
+ b.api.damage(self,15,target);assert.equal(self.hp,hpBefore-10,'보호막 5 흡수 후 나머지 10은 체력으로');assert.equal(self.shield,0);
 }
 {
  const {b,self,bank}=setup(false,1);drop(bank,b,self,3);assert.deepEqual(tick(b,1),[]); assert.equal(self.rooted,true); const stationary={x:self.x,y:self.y}; const chargeSounds=tick(b,480); assert.equal(chargeSounds.filter(x=>x==='remoteClick').length,1); assert.equal(chargeSounds.filter(x=>x==='missileLaunch').length,1); assert.equal(chargeSounds.filter(x=>x==='countdownTick').length,3); assert.equal(self.x,stationary.x); assert.equal(self.y,stationary.y); assert.equal(self.rooted,false);assert.equal(self.skillState[preset.id].money,0,'두 번째 슬롯도 발사');
