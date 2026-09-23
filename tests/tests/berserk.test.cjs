@@ -71,6 +71,19 @@ const CINE_FRAMES = Math.ceil(4.5 * 120) + 2;
   assert.ok(b.shakeRequest > 0, '변신 중 화면 흔들림 요청');
 }
 
+// The photo hook picks the primary portrait while at rest, and swaps to the secondary one as soon as
+// the transform starts, staying swapped through the whole cine + berserk window.
+{
+  const { b, self, target } = setup();
+  assert.equal(types.berserk.photo(self, skill()), 'primary', '평시엔 원래 사진');
+  advance(b, Math.ceil(preset.params.transformTime * 120));
+  advance(b, 1);
+  assert.equal(b.effects[0].mode, 'cine');
+  assert.equal(types.berserk.photo(self, skill()), 'secondary', '변신 시작하자마자 각성 사진으로');
+  advance(b, CINE_FRAMES);
+  assert.equal(types.berserk.photo(self, skill()), 'secondary', '각성 상태 내내 각성 사진 유지');
+}
+
 // After the cinematic window, it switches to berserk mode, unroots, and starts charging.
 {
   const { b, self, target } = setup();
