@@ -3,10 +3,10 @@
   const $ = id => document.getElementById(id), { Battle, validate, copy, SIZE, PAD } = ArenaEngine;
   const KEY = 'bounce.roster.v1', types = ArenaAbilities, canvas = $('canvas'), ctx = canvas.getContext('2d');
   let data = validate(ArenaDefaults, types), battle, accumulator = 0, last = 0, lastEvent = -1;
-  let editingCharacter = '', editingAbility = '', draftImage = '', imageVersion = 0, pendingImport = null;
+  let editingCharacter = '', editingAbility = '', draftImage = '', draftImage2 = '', imageVersion = 0, pendingImport = null;
   let countdown = null, lastCount = 0;
   let feedback = [], lastImpact = 0, shake = 0, tint = 0, effectsEnabled = !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const images = new Map(), wallSound = new ArenaWallSound();
+  const images = new Map(), images2 = new Map(), wallSound = new ArenaWallSound();
   function message(text, error = false) { $('save-status').textContent = text; $('save-status').style.color = error ? '#b02020' : '#246c31'; }
   let loadedStored = false;
   try { const stored = localStorage.getItem(KEY); if (stored) { data = validate(JSON.parse(stored), types); loadedStored = true; } }
@@ -77,6 +77,7 @@
     const checked = [...$('character-abilities').querySelectorAll('input:checked')].map(el => el.value);
     renderAbilityChecks(checked);
     images.clear(); for (const c of data.characters) if (c.image) { const img = new Image(); img.src = c.image; images.set(c.id, img); }
+    images2.clear(); for (const c of data.characters) if (c.image2) { const img = new Image(); img.src = c.image2; images2.set(c.id, img); }
   }
   function persist(next, preferredCharacter) {
     const clean = validate(next, types); data = clean;
@@ -143,7 +144,8 @@
       ctx.save();
 ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
       circle(f.x, f.y, f.radius, f.flash > 0 && effectsEnabled ? '#ff7777' : f.color);
-      const img = images.get(f.id);
+      const awakened = f.skills.some(skill => types[skill.type].photo?.(f, skill) === 'secondary');
+      const img = (awakened && images2.get(f.id)) || images.get(f.id);
       if (img?.complete && img.naturalWidth) {
         ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.facing); ctx.beginPath(); ctx.arc(0, 0, f.radius - 2, 0, Math.PI * 2); ctx.clip();
         const side = Math.min(img.naturalWidth, img.naturalHeight); ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, -f.radius, -f.radius, f.radius * 2, f.radius * 2); ctx.restore();
@@ -246,11 +248,12 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
     const a = data.abilities.find(a => a.id === id); $('ability-name').value = a?.name || ''; $('ability-type').value = a?.type || 'projectile'; $('ability-cooldown').value = a?.cooldown || 3; abilityFields(a?.params);
   }
   function portrait() { $('portrait').style.background = $('character-color').value; $('portrait').replaceChildren(); if (draftImage) { const img = new Image(); img.src = draftImage; img.alt = ''; $('portrait').append(img); } }
+  function portrait2() { $('portrait2').style.background = $('character-color').value; $('portrait2').replaceChildren(); if (draftImage2) { const img = new Image(); img.src = draftImage2; img.alt = ''; $('portrait2').append(img); } }
   function loadCharacter(id) {
     imageVersion++; editingCharacter = id; $('character-list').value = id;
     const c = data.characters.find(c => c.id === id);
     for (const [field, value] of Object.entries({ name: c?.name || '', color: c?.color || '#ffc56e', hp: c?.hp ?? 200, speed: c?.speed ?? 300, radius: c?.radius ?? 42, contact: c?.contactDamage ?? 5 })) $('character-' + field).value = value;
-    draftImage = c?.image || ''; $('character-image').value = ''; renderAbilityChecks(c?.abilities || []); portrait();
+    draftImage = c?.image || ''; $('character-image').value = ''; draftImage2 = c?.image2 || ''; $('character-image2').value = ''; renderAbilityChecks(c?.abilities || []); portrait(); portrait2();
   }
   function uid(prefix) { return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9); }
   $('ability-form').onsubmit = event => {
@@ -266,7 +269,7 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
   $('character-form').onsubmit = event => {
     event.preventDefault();
     try {
-      const next = copy(data), c = { id: editingCharacter || uid('character'), name: $('character-name').value.trim(), color: $('character-color').value, image: draftImage,
+      const next = copy(data), c = { id: editingCharacter || uid('character'), name: $('character-name').value.trim(), color: $('character-color').value, image: draftImage, image2: draftImage2,
         hp: Number($('character-hp').value), speed: Number($('character-speed').value), radius: Number($('character-radius').value), contactDamage: Number($('character-contact').value), abilities: [...$('character-abilities').querySelectorAll('input:checked')].map(el => el.value) };
       const index = next.characters.findIndex(item => item.id === c.id); if (index < 0) next.characters.push(c); else next.characters[index] = c;
       validate(next, types); editingCharacter = c.id; persist(next, c.id); loadCharacter(c.id);
@@ -286,7 +289,20 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
     } catch (error) { if (version === imageVersion) message(error.message, true); }
   };
   $('clear-image').onclick = () => { imageVersion++; draftImage = ''; $('character-image').value = ''; portrait(); };
-  $('character-color').oninput = portrait;
+  $('character-image2').onchange = async event => {
+    const file = event.target.files[0]; if (!file) return;
+    const version = ++imageVersion;
+    try {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1024 * 1024) throw Error('1MB 이하의 PNG·JPG·WebP 파일을 선택하세요.');
+      const url = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(Error('사진을 읽지 못했습니다.')); reader.readAsDataURL(file); });
+      const img = new Image(); img.src = url; await img.decode(); if (version !== imageVersion) return;
+      const thumb = document.createElement('canvas'); thumb.width = thumb.height = 160; const side = Math.min(img.naturalWidth, img.naturalHeight);
+      thumb.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 160, 160);
+      draftImage2 = thumb.toDataURL('image/png'); portrait2(); message('각성 사진을 적용했습니다. 캐릭터 저장을 눌러 주세요.');
+    } catch (error) { if (version === imageVersion) message(error.message, true); }
+  };
+  $('clear-image2').onclick = () => { imageVersion++; draftImage2 = ''; $('character-image2').value = ''; portrait2(); };
+  $('character-color').oninput = () => { portrait(); portrait2(); };
   function download(text, name, type) { const url = URL.createObjectURL(new Blob([text], { type })), a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
   $('export').onclick = () => { download(JSON.stringify(data, null, 2), 'bounce-roster.json', 'application/json'); message('저장된 설정을 내보냈습니다. 편집 중인 내용은 먼저 저장해 주세요.'); };
   $('export-defaults').onclick = () => { download('/* 게임의 기본 캐릭터 설정 */\nglobalThis.ArenaDefaults = ' + JSON.stringify(data, null, 2) + ';\n', 'characters.js', 'text/javascript'); message('공유용 characters.js를 내보냈습니다. 게임 폴더의 같은 이름 파일을 교체하면 새 방문자에게 이 캐릭터가 표시됩니다.'); };
