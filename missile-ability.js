@@ -9,11 +9,12 @@
   const PRE_CHARGE = 1, COUNTDOWN = 3, TOTAL_CHARGE = PRE_CHARGE + COUNTDOWN;
   global.ArenaAbilities.moneyMissile = {
     label: '미사일 쏘기', trigger: 'pickup', uniquePerCharacter: true,
-    description: '바닥의 돈(최대 4개)을 모아 소모하면 리모컨을 꺼내자마자 버튼을 누르고, 3초 카운트다운이 끝나면 경기장 밖에서 유도 미사일이 날아옵니다. 이 능력이 있는 캐릭터만 돈을 줍습니다. 시간만 지나서는 발사하지 않습니다.',
+    description: '바닥의 돈(최대 4개)을 모아 소모하면 리모컨을 꺼내자마자 버튼을 누르고, 3초 카운트다운이 끝나면 경기장 밖에서 유도 미사일이 날아옵니다. 이 능력이 있는 캐릭터만 돈을 줍습니다. 시간만 지나서는 발사하지 않습니다. 카운트다운 동안 무방비 상태이므로 보호막이 함께 걸립니다.',
     fields: {
       required: field('발사에 필요한 돈', 1, 10, 1, 3), dropInterval: field('돈이 떨어지는 간격 (초)', .5, 10, .5, 2),
       damage: field('미사일 피해', 1, 100, 1, 55), speed: field('미사일 속도', 150, 1400, 10, 800),
-      turnRate: field('유도 회전 속도', 1, 12, .5, 9), lifetime: field('최대 추적 시간 (초)', 2, 15, .5, 8)
+      turnRate: field('유도 회전 속도', 1, 12, .5, 9), lifetime: field('최대 추적 시간 (초)', 2, 15, .5, 8),
+      shieldAmount: field('발사 중 보호막', 0, 100, 1, 20)
     },
     status(self, skill) {
       const state = self.skillState[skill.id];
@@ -84,6 +85,7 @@
         });
         if (wallet.money >= e.required && now >= e.nextFire) {
           wallet.money -= e.required; e.charge = TOTAL_CHARGE; wallet.charging = TOTAL_CHARGE; self.rooted = true; e.remoteSide = self.x > 500 ? -1 : 1; e.aim = Math.atan2(target.y - self.y, target.x - self.x);
+          api.shield(self, { amount: e.shieldAmount, duration: TOTAL_CHARGE });
           api.log(`${self.name} · 돈 ${e.required}개 사용! 스위치를 누르고 3초 카운트다운 시작`);
         }
       }
@@ -182,6 +184,6 @@
   };
   global.ArenaMissilePreset = {
     id: 'pack_money_missile_v1', name: '미사일 쏘기', type: 'moneyMissile', cooldown: 1,
-    params: { required: 3, dropInterval: 2, damage: 55, speed: 800, turnRate: 9, lifetime: 8 }
+    params: { required: 3, dropInterval: 2, damage: 55, speed: 800, turnRate: 9, lifetime: 8, shieldAmount: 20 }
   };
 })(globalThis);
