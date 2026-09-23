@@ -43,7 +43,7 @@
         const angle = random() * Math.PI * 2;
         return { ...copy(c), slot, maxHp: c.hp, x: slot ? 525 : 195, y: slot ? 450 : 270, vx: Math.cos(angle) * c.speed, vy: Math.sin(angle) * c.speed,
           skills: c.abilities.map(id => { const a = this.config.abilities.find(a => a.id === id); return { ...copy(a), remaining: a.cooldown }; }),
-          skillState: {}, dash: null, shield: 0, shieldTime: 0, flash: 0, trail: [], spin: 0, facing: 0 };
+          skillState: {}, dash: null, shield: 0, shieldTime: 0, damageReduction: 0, flash: 0, trail: [], spin: 0, facing: 0 };
       });
       if (this.fighters.length !== 2) throw Error('두 명을 선택하세요.');
       this.api = Object.freeze({
@@ -79,6 +79,7 @@
     burst(f) { for (let i = 0; i < 9; i++) { const angle = this.random() * Math.PI * 2, speed = 70 + this.random() * 100; this.particles.push({ x: f.x, y: f.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .4, color: f.color }); } }
     damage(target, amount, source, kind = 'hit') {
       if (!Number.isFinite(amount) || amount <= 0 || target.hp <= 0) return;
+      if (target.damageReduction > 0) amount *= 1 - Math.min(.95, target.damageReduction);
       const absorbed = Math.min(target.shield, amount), actual = Math.min(target.hp, amount - absorbed);
       target.shield -= absorbed; target.hp = Math.max(0, target.hp - actual); target.flash = .22; this.burst(target);
       this.impacts.push({ id: ++this.impactId, x: target.x, y: target.y, amount: actual, absorbed, kind, power: Math.min(1, amount / 25) });
