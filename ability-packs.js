@@ -1204,6 +1204,8 @@
   'use strict';
   const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
   const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+  const askBurstImage=typeof Image!=='undefined'&&g.ArenaMedia?new Image():null;
+  if(askBurstImage) askBurstImage.src=g.ArenaMedia.askBurst;
 
   g.ArenaAbilities.askFight={
     label:'물어보고 공격',
@@ -1268,17 +1270,37 @@
       }
     },
     draw(ctx,e,self){
-      if(e.phase==='ask'){
-        const bx=self.x, by=self.y-self.radius-34;
-        ctx.fillStyle='#232530'; ctx.strokeStyle='#111'; ctx.lineWidth=2;
-        ctx.fillRect(bx-22,by-15,44,30); ctx.strokeRect(bx-22,by-15,44,30);
-        ctx.beginPath();
-        ctx.moveTo(bx-6,by+15); ctx.lineTo(bx,by+24); ctx.lineTo(bx+6,by+15);
-        ctx.closePath(); ctx.fill();
-        ctx.fillStyle='#fff'; ctx.font='900 20px Arial, sans-serif';
+      const showAsk=e.phase==='ask';
+      const showAnnounce=e.phase!=='ask'&&e.age<.4;
+      if(showAsk||showAnnounce){
+        const bx=self.x, by=self.y-self.radius-52, scale=1.7, burstSize=50;
+        const fade=!showAnnounce?1:(e.age<.25?1:clamp(1-(e.age-.25)/.15,0,1));
+        ctx.save();
+        ctx.globalAlpha=fade;
+        if(askBurstImage&&askBurstImage.complete&&askBurstImage.naturalWidth){
+          ctx.save();
+          ctx.translate(bx,by-26); ctx.rotate(showAsk?e.age*2.4:0);
+          ctx.drawImage(askBurstImage,-burstSize/2,-burstSize/2,burstSize,burstSize);
+          ctx.restore();
+        }
+        ctx.translate(bx,by); ctx.scale(scale,scale);
+        ctx.fillStyle='#2b2f38'; ctx.fillRect(-16,-2,32,10);
+        ctx.fillStyle='#1c1f26'; ctx.fillRect(-16,-22,32,20);
+        ctx.fillStyle='#7fd3ff'; ctx.fillRect(-13,-19,26,14);
         ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText('?',bx,by+1);
-        return;
+        if(showAsk){
+          const step=Math.max(.001,e.askTime/3);
+          const dots=1+Math.min(2,Math.floor(e.age/step));
+          ctx.fillStyle='#0c1116'; ctx.font='900 12px Arial, sans-serif';
+          ctx.fillText('.'.repeat(dots),0,-12);
+        }else{
+          const label=e.fight?'싸워':'싸우지마';
+          let size=11; ctx.font=`900 ${size}px Arial, sans-serif`;
+          while(ctx.measureText(label).width>24&&size>5){ size--; ctx.font=`900 ${size}px Arial, sans-serif`; }
+          ctx.fillStyle=e.fight?'#e14b4b':'#3f6fe0';
+          ctx.fillText(label,0,-12);
+        }
+        ctx.restore();
       }
       if(!e.fight&&e.lapX!=null){
         ctx.save();
