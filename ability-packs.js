@@ -499,172 +499,165 @@
 
   });
 })(globalThis);
-/* 초록색 독가스: 렌더링 전용 */
+/* 독가스 편집 설정 v2 */
 (function (g) {
-  'use strict';
-
-  const GAS = {
-    sizeScale: 1,           // 구름 크기 배율
-    spread: 5,             // 위치 흔들림·이동 속도
-    lifetime: 1,           // 파티클 수명: 초
-    colors: [
-      '120,200,40',
-      '90,170,30',
-      '160,220,60'
-    ],
-    startMin: .5,          // 캐릭터 반지름 × 최소 크기
-    startMax: .8,          // 캐릭터 반지름 × 최대 크기
-    widthScale: .55,       // 이동 방향 옆으로 퍼지는 폭
-    growthPerFrame: 1.01,  // 60fps 기준 프레임당 성장
-    spawnInterval: 2 / 60, // 2프레임마다 생성
-    alpha: .3,
-    maxPerEffect: 64,
-    maxTotal: 512
+  const STYLE = {
+    colors: ['120,200,40', '90,170,30', '160,220,60'],
+    interval: 2 / 60,
+    growth: 1.01,
+    maxGrowth: 2.2,
+    maxParticles: 1024
   };
 
-  const states = new WeakMap();
+  const skill = g.ArenaAbilities.fart;
+  Object.assign(skill.fields, {
+    visualThickness: {
+      label: '연기 두께 (%)',
+      min: 20, max: 250, step: 1, default: 100
+    },
+    visualSpread: {
+      label: '연기 퍼짐 (픽셀)',
+      min: 0, max: 60, step: 1, default: 5
+    },
+    visualLifetime: {
+      label: '연기가 남는 시간 (초)',
+      min: .3, max: 8, step: .1, default: 1
+    }
+  });
 
-  // 전투에서 쓰는 난수와 분리된 시각 효과용 난수
-  function random(state) {
-    state.seed =
-      (Math.imul(state.seed, 1664525) + 1013904223) >>> 0;
-    return state.seed / 4294967296;
-  }
+  skill.fields.radius.label = '피해 판정 범위';
+  skill.fields.puffDuration.label = '피해 판정 지속 시간 (초)';
+
+  const cache = new WeakMap();
+  const rng = s => {
+    s.seed = (Math.imul(s.seed, 1664525) + 1013904223) >>> 0;
+    return s.seed / 4294967296;
+  };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
   g.ArenaDrawGas = function (ctx, battle) {
-    let total = 0;
+    let system = cache.get(battle);
+    if (!system) {
+      system = { states: new Map(), particles: [] };
+      cache.set(battle, system);
+    }
+
+    const now = battle.time;
+    system.particles = system.particles.filter(
+      p => now - p.born < p.life
+    );
+    const active = new Set();
+
+    for (const e of battle.effects) {
+      if (e.type !== 'fart') continue;
+      const f = battle.fighters[e.owner];
+      if (!f || f.hp <= 0) continue;
+      active.add(e);
+
+      let s = system.states.get(e);
+      if (!s) {
+        s = {
+          start: now - e.age,
+          next: now - e.age,
+          time: now,
+          x: f.x,
+          y: f.y,
+          seed: (f.slot + 1) * 7919 + Math.floor(now * 1000)
+        };
+        system.states.set(e, s);
+      }
+
+      const life = clamp(e.visualLifetime ?? 1, .3, 8);
+      const spread = clamp(e.visualSpread ?? 5, 0, 60);
+      const thickness =
+        clamp(e.visualThickness ?? 100, 20, 250) / 100;
+      const end = Math.min(now, s.start + e.trailTime);
+
+      s.next = Math.max(s.next, now - life);
+
+      while (s.next <= end + 1e-8) {
+        const born = s.next;
+        s.next += STYLE.interval;
+        if (system.particles.length >= STYLE.maxParticles) continue;
+
+        const t = now > s.time
+          ? clamp((born - s.time) / (now - s.time), 0, 1)
+          : 1;
+        const dx = f.x - s.x, dy = f.y - s.y;
+        const angle = Math.hypot(dx, dy) > .01
+          ? Math.atan2(dy, dx)
+          : Math.atan2(f.vy, f.vx);
+        const drift = rng(s) * Math.PI * 2;
+        const speed = rng(s) * spread;
+
+        system.particles.push({
+          born,
+          life,
+          thickness,
+          x: s.x + dx * t + (rng(s) - .5) * spread,
+          y: s.y + dy * t + (rng(s) - .5) * spread,
+          vx: Math.cos(drift) * speed,
+          vy: Math.sin(drift) * speed,
+          radius: f.radius * (.5 + rng(s) * .3),
+          angle: angle + (rng(s) - .5) * .3,
+          color: STYLE.colors[
+            Math.floor(rng(s) * STYLE.colors.length)
+          ],
+          phase: rng(s) * Math.PI * 2
+        });
+      }
+
+      s.time = now;
+      s.x = f.x;
+      s.y = f.y;
+    }
+
+    for (const e of system.states.keys()) {
+      if (!active.has(e)) system.states.delete(e);
+    }
+
     ctx.save();
     ctx.beginPath();
     ctx.rect(6, 6, 708, 708);
     ctx.clip();
 
-    for (const effect of battle.effects) {
-      if (effect.type !== 'fart') continue;
-      const self = battle.fighters[effect.owner];
-      if (!self || self.hp <= 0) continue;
-
-      const now = effect.age;
-      let state = states.get(effect);
-
-      if (!state) {
-        state = {
-          age: 0,
-          x: self.x,
-          y: self.y,
-          next: 0,
-          particles: [],
-          seed: (self.slot + 1) * 7919 +
-            Math.floor(battle.time * 1000)
-        };
-        states.set(effect, state);
-      }
-
-      const available = Math.max(
-        0,
-        Math.min(GAS.maxPerEffect, GAS.maxTotal - total)
+    for (const p of system.particles) {
+      const age = now - p.born;
+      const remaining = Math.max(0, p.life - age);
+      const r = p.radius * Math.min(
+        STYLE.maxGrowth,
+        Math.pow(STYLE.growth, age * 60)
       );
 
-      state.particles = state.particles.filter(p =>
-        now - p.born < GAS.lifetime
-      ).slice(0, available);
+      ctx.save();
+      ctx.translate(p.x + p.vx * age, p.y + p.vy * age);
+      ctx.rotate(p.angle);
+      ctx.scale(1, p.thickness);
+      ctx.globalAlpha = Math.min(1, remaining * .3);
 
-      const end = Math.min(now, effect.trailTime);
-      state.next = Math.max(state.next, now - GAS.lifetime);
-
-      while (state.next <= end + 1e-8) {
-        const born = state.next;
-        state.next += GAS.spawnInterval;
-        if (state.particles.length >= available) continue;
-
-        const t = now > state.age
-          ? Math.max(0, Math.min(
-              1, (born - state.age) / (now - state.age)
-            ))
-          : 1;
-
-        const dx = self.x - state.x;
-        const dy = self.y - state.y;
-        const direction = Math.hypot(dx, dy) > .01
-          ? Math.atan2(dy, dx)
-          : Math.atan2(self.vy, self.vx);
-
-        const drift = random(state) * Math.PI * 2;
-        const speed = random(state) * GAS.spread;
-
-        state.particles.push({
-          born,
-          x: state.x + dx * t +
-            (random(state) - .5) * GAS.spread,
-          y: state.y + dy * t +
-            (random(state) - .5) * GAS.spread,
-          vx: Math.cos(drift) * speed,
-          vy: Math.sin(drift) * speed,
-          radius: self.radius * GAS.sizeScale *
-            (GAS.startMin +
-              random(state) * (GAS.startMax - GAS.startMin)),
-          angle: direction + (random(state) - .5) * .3,
-          color: GAS.colors[
-            Math.floor(random(state) * GAS.colors.length)
-          ],
-          phase: random(state) * Math.PI * 2
-        });
-      }
-
-      state.age = now;
-      state.x = self.x;
-      state.y = self.y;
-      total += state.particles.length;
-
-      for (const p of state.particles) {
-        const age = now - p.born;
-        const life = Math.max(0, GAS.lifetime - age);
-        if (life <= 0) continue;
-
-        const r = p.radius *
-          Math.pow(GAS.growthPerFrame, age * 60);
-
-        ctx.save();
-        ctx.translate(
-          p.x + p.vx * age,
-          p.y + p.vy * age
+      for (let i = 0; i < 3; i++) {
+        const a = p.phase + i * Math.PI * 2 / 3;
+        const x = Math.cos(a) * r * .22;
+        const y = Math.sin(a) * r * .22;
+        const radius = r * (i === 0 ? .8 : .65);
+        const fill = ctx.createRadialGradient(
+          x, y, 0, x, y, radius
         );
-        ctx.rotate(p.angle);
-        ctx.scale(1, GAS.widthScale);
-        ctx.globalAlpha = Math.min(1, life * GAS.alpha);
 
-        // 부드러운 덩어리 세 개를 겹쳐 뭉게구름 표현
-        for (let i = 0; i < 3; i++) {
-          const angle = p.phase + i * Math.PI * 2 / 3;
-          const x = Math.cos(angle) * r * .22;
-          const y = Math.sin(angle) * r * .22;
-          const radius = r * (i === 0 ? .8 : .65);
-          const fill = ctx.createRadialGradient(
-            x, y, 0, x, y, radius
-          );
-          fill.addColorStop(
-            0, 'rgba(' + p.color + ',.65)'
-          );
-          fill.addColorStop(
-            .45, 'rgba(' + p.color + ',.3)'
-          );
-          fill.addColorStop(
-            1, 'rgba(' + p.color + ',0)'
-          );
+        fill.addColorStop(0, 'rgba(' + p.color + ',.65)');
+        fill.addColorStop(.45, 'rgba(' + p.color + ',.3)');
+        fill.addColorStop(1, 'rgba(' + p.color + ',0)');
 
-          ctx.fillStyle = fill;
-          ctx.fillRect(
-            x - radius, y - radius,
-            radius * 2, radius * 2
-          );
-        }
-
-        ctx.restore();
+        ctx.fillStyle = fill;
+        ctx.fillRect(
+          x - radius, y - radius,
+          radius * 2, radius * 2
+        );
       }
+      ctx.restore();
     }
-
     ctx.restore();
   };
 
-  // 기존 보라색 원만 숨김. 판정과 업데이트는 유지.
-  g.ArenaAbilities.fart.draw = function () {};
+  skill.draw = function () {};
 })(globalThis);
