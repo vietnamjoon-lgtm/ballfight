@@ -468,6 +468,8 @@ function mount(){
     add(data.abilities,g.ArenaFartPreset);
     add(data.abilities,g.ArenaOrbPreset);
     add(data.abilities,g.ArenaAskFightPreset);
+    add(data.abilities,g.ArenaBerserkPreset);
+    add(data.abilities,g.ArenaSpikeGuardPreset);
 
     if(g.ArenaPhonePack){
       g.ArenaPhonePack.abilities.forEach(a=>
@@ -816,6 +818,7 @@ function mount(){
           for(const e of battle.audioEvents){
             sound.play(e.type);
           }
+          shake=Math.max(shake,battle.shakeRequest);
         }
 
         if(battle.impactId>seenImpact){
