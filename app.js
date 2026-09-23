@@ -136,6 +136,8 @@
         globalThis.ArenaDrawGas?.(ctx, battle);
     for (const f of battle.fighters) {
       if (f.dash) { f.trail.forEach((p, i) => { ctx.globalAlpha = i / f.trail.length * .2; circle(p.x, p.y, f.radius * i / f.trail.length, f.color); }); } ctx.globalAlpha = 1;
+      ctx.save();
+ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
       circle(f.x, f.y, f.radius, f.flash > 0 && effectsEnabled ? '#ff7777' : f.color);
       const img = images.get(f.id);
       if (img?.complete && img.naturalWidth) {
