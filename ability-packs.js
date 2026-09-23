@@ -499,3 +499,172 @@
 
   });
 })(globalThis);
+/* 초록색 독가스: 렌더링 전용 */
+(function (g) {
+  'use strict';
+
+  const GAS = {
+    sizeScale: 1,           // 구름 크기 배율
+    spread: 5,             // 위치 흔들림·이동 속도
+    lifetime: 1,           // 파티클 수명: 초
+    colors: [
+      '120,200,40',
+      '90,170,30',
+      '160,220,60'
+    ],
+    startMin: .5,          // 캐릭터 반지름 × 최소 크기
+    startMax: .8,          // 캐릭터 반지름 × 최대 크기
+    widthScale: .55,       // 이동 방향 옆으로 퍼지는 폭
+    growthPerFrame: 1.01,  // 60fps 기준 프레임당 성장
+    spawnInterval: 2 / 60, // 2프레임마다 생성
+    alpha: .3,
+    maxPerEffect: 64,
+    maxTotal: 512
+  };
+
+  const states = new WeakMap();
+
+  // 전투에서 쓰는 난수와 분리된 시각 효과용 난수
+  function random(state) {
+    state.seed =
+      (Math.imul(state.seed, 1664525) + 1013904223) >>> 0;
+    return state.seed / 4294967296;
+  }
+
+  g.ArenaDrawGas = function (ctx, battle) {
+    let total = 0;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(6, 6, 708, 708);
+    ctx.clip();
+
+    for (const effect of battle.effects) {
+      if (effect.type !== 'fart') continue;
+      const self = battle.fighters[effect.owner];
+      if (!self || self.hp <= 0) continue;
+
+      const now = effect.age;
+      let state = states.get(effect);
+
+      if (!state) {
+        state = {
+          age: 0,
+          x: self.x,
+          y: self.y,
+          next: 0,
+          particles: [],
+          seed: (self.slot + 1) * 7919 +
+            Math.floor(battle.time * 1000)
+        };
+        states.set(effect, state);
+      }
+
+      const available = Math.max(
+        0,
+        Math.min(GAS.maxPerEffect, GAS.maxTotal - total)
+      );
+
+      state.particles = state.particles.filter(p =>
+        now - p.born < GAS.lifetime
+      ).slice(0, available);
+
+      const end = Math.min(now, effect.trailTime);
+      state.next = Math.max(state.next, now - GAS.lifetime);
+
+      while (state.next <= end + 1e-8) {
+        const born = state.next;
+        state.next += GAS.spawnInterval;
+        if (state.particles.length >= available) continue;
+
+        const t = now > state.age
+          ? Math.max(0, Math.min(
+              1, (born - state.age) / (now - state.age)
+            ))
+          : 1;
+
+        const dx = self.x - state.x;
+        const dy = self.y - state.y;
+        const direction = Math.hypot(dx, dy) > .01
+          ? Math.atan2(dy, dx)
+          : Math.atan2(self.vy, self.vx);
+
+        const drift = random(state) * Math.PI * 2;
+        const speed = random(state) * GAS.spread;
+
+        state.particles.push({
+          born,
+          x: state.x + dx * t +
+            (random(state) - .5) * GAS.spread,
+          y: state.y + dy * t +
+            (random(state) - .5) * GAS.spread,
+          vx: Math.cos(drift) * speed,
+          vy: Math.sin(drift) * speed,
+          radius: self.radius * GAS.sizeScale *
+            (GAS.startMin +
+              random(state) * (GAS.startMax - GAS.startMin)),
+          angle: direction + (random(state) - .5) * .3,
+          color: GAS.colors[
+            Math.floor(random(state) * GAS.colors.length)
+          ],
+          phase: random(state) * Math.PI * 2
+        });
+      }
+
+      state.age = now;
+      state.x = self.x;
+      state.y = self.y;
+      total += state.particles.length;
+
+      for (const p of state.particles) {
+        const age = now - p.born;
+        const life = Math.max(0, GAS.lifetime - age);
+        if (life <= 0) continue;
+
+        const r = p.radius *
+          Math.pow(GAS.growthPerFrame, age * 60);
+
+        ctx.save();
+        ctx.translate(
+          p.x + p.vx * age,
+          p.y + p.vy * age
+        );
+        ctx.rotate(p.angle);
+        ctx.scale(1, GAS.widthScale);
+        ctx.globalAlpha = Math.min(1, life * GAS.alpha);
+
+        // 부드러운 덩어리 세 개를 겹쳐 뭉게구름 표현
+        for (let i = 0; i < 3; i++) {
+          const angle = p.phase + i * Math.PI * 2 / 3;
+          const x = Math.cos(angle) * r * .22;
+          const y = Math.sin(angle) * r * .22;
+          const radius = r * (i === 0 ? .8 : .65);
+          const fill = ctx.createRadialGradient(
+            x, y, 0, x, y, radius
+          );
+          fill.addColorStop(
+            0, 'rgba(' + p.color + ',.65)'
+          );
+          fill.addColorStop(
+            .45, 'rgba(' + p.color + ',.3)'
+          );
+          fill.addColorStop(
+            1, 'rgba(' + p.color + ',0)'
+          );
+
+          ctx.fillStyle = fill;
+          ctx.fillRect(
+            x - radius, y - radius,
+            radius * 2, radius * 2
+          );
+        }
+
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  };
+
+  // 기존 보라색 원만 숨김. 판정과 업데이트는 유지.
+  g.ArenaAbilities.fart.draw = function () {};
+})(globalThis);
