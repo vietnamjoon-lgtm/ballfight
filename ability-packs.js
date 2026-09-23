@@ -1378,40 +1378,6 @@
     }
     ctx.restore();
   };
-  const drawMummyWrap=(ctx,self,progress)=>{
-    const n=8, r=self.radius;
-    ctx.save();
-    ctx.beginPath(); ctx.arc(self.x,self.y,r,0,Math.PI*2); ctx.clip();
-    ctx.translate(self.x,self.y);
-    const bandH=r*2/n;
-    ctx.strokeStyle='#12332c'; ctx.lineWidth=3; ctx.fillStyle='#3f9784';
-    for(let i=0;i<n;i++){
-      const bandProgress=Math.max(0,Math.min(1,progress*n-i));
-      if(bandProgress<=0) continue;
-      const y=-r+i*bandH;
-      ctx.save();
-      ctx.translate(0,y+bandH/2);
-      ctx.scale(bandProgress,1);
-      const rw=r*2+20;
-      ctx.beginPath(); ctx.roundRect(-rw/2,-bandH/2+2,rw,bandH-4,bandH/2-4); ctx.fill(); ctx.stroke();
-      ctx.restore();
-    }
-    ctx.restore();
-    if(progress<.98) return;
-    ctx.save(); ctx.translate(self.x,self.y);
-    const ex=r*.4, ey=-r*.05, erx=r*.2, ery=r*.27;
-    ctx.fillStyle='#f2b73a'; ctx.strokeStyle='#12332c'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.ellipse(-ex,ey,erx,ery,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(ex,ey,erx,ery,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle='#6fc4ff'; ctx.globalAlpha=.9;
-    ctx.beginPath();
-    ctx.moveTo(-ex-r*.06,ey+ery*.7);
-    ctx.quadraticCurveTo(-ex-r*.1,ey+ery*1.3,-ex-r*.02,ey+ery*1.5);
-    ctx.quadraticCurveTo(-ex+r*.03,ey+ery*1.4,-ex,ey+ery*.9);
-    ctx.closePath(); ctx.fill(); ctx.strokeStyle='#12332c'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.globalAlpha=1;
-    ctx.restore();
-  };
   const spawnParticles=(api,e,x,y)=>{
     for(let i=0;i<9;i++){
       const a=api.random()*Math.PI*2, s=80+api.random()*160;
@@ -1435,7 +1401,7 @@
   g.ArenaAbilities.berserk={
     label:'각성 폭주',
     trigger:'pickup',
-    description:'각성 전까지는 접촉 피해를 줄여주고, 바닥에 떨어지는 빵을 먹어 체력을 회복하며 버팁니다. 설정한 시간이 지나면 체력과 무관하게 각성합니다: 전장 중앙으로 이동하며 화면이 흔들리고 마법진과 함께 몸이 붕대로 감싸입니다. 이후 정해진 시간 동안 상대에게 계속 돌진해 큰 피해로 박치기하고 물러났다가 다시 돌진하기를 반복하며, 돌진할 때마다 화면이 크게 흔들리고 파편이 튑니다. 시간이 다 되면 다시 평화로운 상태로 돌아가고, 이 과정이 반복됩니다.',
+    description:'각성 전까지는 접촉 피해를 줄여주고, 바닥에 떨어지는 빵을 먹어 체력을 회복하며 버팁니다. 설정한 시간이 지나면 체력과 무관하게 각성합니다: 전장 중앙으로 이동하며 화면이 흔들리고 마법진이 돌면서, 캐릭터의 각성 사진(설정했다면)으로 모습이 바뀝니다. 이후 정해진 시간 동안 상대에게 계속 돌진해 큰 피해로 박치기하고 물러났다가 다시 돌진하기를 반복하며, 돌진할 때마다 화면이 크게 흔들리고 파편이 튑니다. 시간이 다 되면 다시 평화로운 상태(원래 사진)로 돌아가고, 이 과정이 반복됩니다.',
     fields:{
       transformTime:field('각성까지 걸리는 시간 (초)',5,120,1,30),
       damageReduction:field('각성 전 피해 감소 (%)',0,90,5,40),
@@ -1455,6 +1421,10 @@
       if(s.mode==='cine') return {label:'변신 중',progress:1};
       if(s.mode==='berserk') return {label:'각성!',progress:1};
       return {label:`각성까지 ${Math.max(0,Math.ceil(skill.params.transformTime-s.elapsed))}초`,progress:Math.min(1,s.elapsed/skill.params.transformTime)};
+    },
+    photo(self,skill){
+      const s=self.skillState[skill.id];
+      return s&&s.mode!=='survive'?'secondary':'primary';
     },
     cast(api,self,target,p,skill){
       self.skillState[skill.id]={elapsed:0,mode:'survive'};
@@ -1583,10 +1553,6 @@
       if(e.mode==='cine'){
         const t=Math.min(1,e.awakenAge/CINE_DUR);
         drawMagicCircle(ctx,self,t);
-        const wrapT=Math.max(0,Math.min(1,(e.awakenAge-MOVE_DUR*.5)/(CINE_DUR-MOVE_DUR*.5)));
-        drawMummyWrap(ctx,self,wrapT);
-      }else{
-        drawMummyWrap(ctx,self,1);
       }
       if(e.particles?.length) drawParticles(ctx,e.particles);
     }
