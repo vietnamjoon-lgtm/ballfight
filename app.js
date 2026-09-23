@@ -316,4 +316,144 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden && (battle.state === 'running' || (countdown && !countdown.paused))) pause(); });
   for (const [key, type] of Object.entries(types)) $('ability-type').append(option(key, type.label));
   refreshLists(); loadAbility(data.abilities[0]?.id || ''); loadCharacter(data.characters[0].id); reset(); requestAnimationFrame(frame);
+(() => {
+  function mergePacks(base, packs) {
+    const next = copy(base);
+    const same = (a, b) => {
+      const { id: ignoredA, ...left } = a;
+      const { id: ignoredB, ...right } = b;
+      return JSON.stringify(left) === JSON.stringify(right);
+    };
+    const fresh = (list, prefix) => {
+      let n = 1;
+      while (list.some(v => v.id === prefix + n)) n++;
+      return prefix + n;
+    };
+    for (const raw of packs) {
+      const pack = validate(raw, types);
+      const ids = new Map();
+      for (const a of pack.abilities) {
+        const equal = next.abilities.find(v => same(v, a));
+        if (equal) {
+          ids.set(a.id, equal.id);
+          continue;
+        }
+        const id = next.abilities.some(v => v.id === a.id)
+          ? fresh(next.abilities, 'import_ability_') : a.id;
+        next.abilities.push({ ...a, id });
+        ids.set(a.id, id);
+      }
+      for (const c of pack.characters) {
+        const incoming = {
+          ...c,
+          abilities: c.abilities.map(id => ids.get(id))
+        };
+        if (next.characters.some(v => same(v, incoming))) continue;
+        if (next.characters.some(v => v.id === incoming.id)) {
+          incoming.id = fresh(next.characters, 'import_character_');
+        }
+        next.characters.push(incoming);
+      }
+    }
+    return validate(next, types);
+  }
+
+  const single = document.createElement('button');
+  single.type = 'button';
+  single.textContent = '선택한 캐릭터 내보내기 ↓';
+  $('export').after(single);
+  $('export').textContent = '전체 보관함 내보내기 ↓';
+
+  single.onclick = () => {
+    const c = data.characters.find(c => c.id === editingCharacter);
+    if (!c) {
+      message('캐릭터를 선택하고 먼저 저장해 주세요.', true);
+      return;
+    }
+    const pack = {
+      version: 1,
+      characters: [copy(c)],
+      abilities: data.abilities
+        .filter(a => c.abilities.includes(a.id))
+        .map(copy)
+    };
+    const name = c.name.replace(/[\\/:*?"<>|]/g, '_');
+    download(
+      JSON.stringify(pack, null, 2),
+      name + '.json',
+      'application/json'
+    );
+    message(c.name + '의 저장된 사진·능력·수치를 내보냈습니다.');
+  };
+
+  let packs = null, readId = 0;
+  const input = $('import');
+  input.multiple = true;
+  const label = input.parentElement;
+  for (const node of label.childNodes) {
+    if (node.nodeType === 3 && node.textContent.trim()) {
+      node.textContent = '캐릭터·설정 추가하기 ↑';
+    }
+  }
+  $('apply-import').textContent = '기존 보관함에 추가';
+
+  input.onchange = async event => {
+    const files = [...event.target.files];
+    const token = ++readId;
+    packs = null;
+    $('import-preview').hidden = true;
+    input.value = '';
+    if (!files.length) return;
+    try {
+      if (files.reduce((n, f) => n + f.size, 0) > 8 * 1024 * 1024) {
+        throw Error('선택한 파일의 합계는 8MB 이하여야 합니다.');
+      }
+      const loaded = [];
+      for (const file of files) {
+        const raw = JSON.parse(await file.text());
+        if (token !== readId) return;
+        loaded.push(validate(raw, types));
+      }
+      const preview = mergePacks(data, loaded);
+      packs = loaded;
+      $('import-summary').textContent =
+        '캐릭터 ' + (preview.characters.length - data.characters.length) +
+        '개, 능력 ' + (preview.abilities.length - data.abilities.length) +
+        '개를 추가합니다. 기존 내용은 유지하고 완전히 같은 항목은 건너뜁니다.';
+      $('import-preview').hidden = false;
+      message('파일 확인 완료. 추가 버튼을 누르세요.');
+    } catch (error) {
+      if (token === readId) {
+        message('불러오기 실패: ' + error.message, true);
+      }
+    }
+  };
+
+  $('apply-import').onclick = () => {
+    if (!packs) return;
+    try {
+      const next = mergePacks(data, packs);
+      const chosen = next.characters.find(c =>
+        !data.characters.some(old => old.id === c.id)
+      )?.id || editingCharacter || next.characters[0].id;
+      persist(next, chosen);
+      loadCharacter(chosen);
+      loadAbility(
+        data.abilities.some(a => a.id === editingAbility)
+          ? editingAbility : data.abilities[0]?.id || ''
+      );
+      packs = null;
+      $('import-preview').hidden = true;
+    } catch (error) {
+      message('추가 실패: ' + error.message, true);
+    }
+  };
+
+  $('cancel-import').onclick = () => {
+    readId++;
+    packs = null;
+    $('import-preview').hidden = true;
+    message('추가를 취소했습니다.');
+  };
+})();
 })();
