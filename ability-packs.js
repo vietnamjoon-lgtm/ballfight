@@ -496,6 +496,6 @@
       }
     };
 
-    document.body.append(button);
+
   });
 })(globalThis);
