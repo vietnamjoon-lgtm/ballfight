@@ -1,8 +1,8 @@
-// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw and bread-eating sounds. No background music.
+// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw, bread-eating and berserk awaken/slam sounds. No background music.
 (function (global) {
   'use strict';
   class ArenaWallSound {
-    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.samples = { missile: null, punch: null, sword: null, tick: null, six: null, seven: null, breadEat: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
+    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.samples = { missile: null, punch: null, sword: null, tick: null, six: null, seven: null, breadEat: null, awaken: null, berserkSlam: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
     loadMedia() {
       if (this.loading || !global.ArenaMedia || !this.context) return;
       const decode = key => {
@@ -11,8 +11,8 @@
         const bytes = Uint8Array.from(atob(media.split(',')[1]), c => c.charCodeAt(0));
         return this.context.decodeAudioData(bytes.buffer).catch(() => null);
       };
-      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick'), decode('six'), decode('seven'), decode('breadEat')]).then(([missile, punch, sword, tick, six, seven, breadEat]) => {
-        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick; this.samples.six = six; this.samples.seven = seven; this.samples.breadEat = breadEat;
+      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick'), decode('six'), decode('seven'), decode('breadEat'), decode('awaken'), decode('berserkSlam')]).then(([missile, punch, sword, tick, six, seven, breadEat, awaken, berserkSlam]) => {
+        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick; this.samples.six = six; this.samples.seven = seven; this.samples.breadEat = breadEat; this.samples.awaken = awaken; this.samples.berserkSlam = berserkSlam;
       });
     }
     setRate(rate) {
@@ -58,6 +58,17 @@
       const voice = { source, gain }; this.voices.add(voice);
       source.onended = () => { source.disconnect(); gain.disconnect(); this.voices.delete(voice); };
       source.start(0);
+    }
+    playClip(name, volume, offset, duration) {
+      const sample = this.samples[name];
+      if (!sample) return;
+      const c = this.context;
+      const source = c.createBufferSource(), gain = c.createGain(); source.buffer = sample;
+      if (source.playbackRate) source.playbackRate.value = this.rate;
+      gain.gain.setValueAtTime(volume, c.currentTime); source.connect(gain); gain.connect(c.destination);
+      const voice = { source, gain }; this.voices.add(voice);
+      source.onended = () => { source.disconnect(); gain.disconnect(); this.voices.delete(voice); };
+      source.start(0, offset, Math.min(duration, Math.max(.01, sample.duration - offset)));
     }
     unlock() {
       if (!this.enabled) return;
@@ -109,6 +120,10 @@
         this.playOneShot('seven', .4);
       } else if (type === 'breadEat') {
         this.playOneShot('breadEat', .8);
+      } else if (type === 'awaken') {
+        this.playClip('awaken', .8, 0, 2.3);
+      } else if (type === 'berserkSlam') {
+        this.playClip('berserkSlam', .9, .58, .45);
       }
     }
     tone(from, to, duration, volume, type) {
