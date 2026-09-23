@@ -1206,13 +1206,14 @@
   const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
   const askBurstImage=typeof Image!=='undefined'&&g.ArenaMedia?new Image():null;
   if(askBurstImage) askBurstImage.src=g.ArenaMedia.askBurst;
+  const ICON_OFFSET=52;
 
   g.ArenaAbilities.askFight={
     label:'물어보고 공격',
-    description:'쿨타임마다 멈춰서 클로드에게 짧게 싸울지 물어봅니다. "싸운다"면 상대에게 다가가 붙잡고 얼굴을 때리고, "말라"면 노트북을 던져 확정적으로 맞힙니다. 반반 확률이며 둘 다 무조건 명중합니다.',
+    description:'쿨타임마다 멈춰서 클로드에게 짧게 싸울지 물어봅니다. "싸운다"면 상대에게 다가가 붙잡고 얼굴을 때리고, "말라"면 물어보던 노트북을 그대로 던져 확정적으로 맞힙니다. 반반 확률이며 둘 다 무조건 명중합니다.',
     fields:{
       damage:field('피해',1,100,1,22),
-      askTime:field('물어보는 시간 (초)',.2,2,.1,.6),
+      askTime:field('물어보는 시간 (초)',.2,3,.1,2),
       actionTime:field('행동 시간 (초)',.3,3,.1,.9)
     },
     cast(api,self,target,p){
@@ -1258,8 +1259,9 @@
         if(e.age>=e.actionTime){ self.rooted=false; target.rooted=false; }
       }else{
         const t=Math.min(1,e.age/e.actionTime);
-        e.lapX=e.startX+(target.x-e.startX)*t;
-        e.lapY=e.startY+(target.y-e.startY)*t;
+        const originX=self.x, originY=self.y-self.radius-ICON_OFFSET;
+        e.lapX=originX+(target.x-originX)*t;
+        e.lapY=originY+(target.y-originY)*t;
         e.lapAngle+=dt*10;
         if(!e.hit&&t>=1){
           api.damage(target,e.damage,self);
@@ -1273,7 +1275,7 @@
       const showAsk=e.phase==='ask';
       const showAnnounce=e.phase!=='ask'&&e.age<.4;
       if(showAsk||showAnnounce){
-        const bx=self.x, by=self.y-self.radius-52, scale=1.7, burstSize=50;
+        const bx=self.x, by=self.y-self.radius-ICON_OFFSET, scale=1.7, burstSize=50;
         const fade=!showAnnounce?1:(e.age<.25?1:clamp(1-(e.age-.25)/.15,0,1));
         ctx.save();
         ctx.globalAlpha=fade;
@@ -1318,6 +1320,6 @@
     name:'물어보고 공격',
     type:'askFight',
     cooldown:6,
-    params:{damage:22,askTime:.6,actionTime:.9}
+    params:{damage:22,askTime:2,actionTime:.9}
   };
 })(globalThis);
