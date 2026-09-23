@@ -149,7 +149,7 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
         for (const offset of [-f.radius * .2, f.radius * .2]) circle(f.x + Math.cos(angle) * f.radius * .35 - Math.sin(angle) * offset, f.y + Math.sin(angle) * f.radius * .35 + Math.cos(angle) * offset, Math.max(2, f.radius / 8), '#122031');
       }
       ctx.strokeStyle = f.shield > 0 ? '#bfa032' : '#222'; ctx.lineWidth = f.shield > 0 ? 3 : 2; ctx.beginPath(); ctx.arc(f.x, f.y, f.radius + (f.shield > 0 ? 7 : 1), 0, Math.PI * 2); ctx.stroke();
-
+      ctx.restore();
     }
     if (countdown) {
       for (const f of battle.fighters) {
