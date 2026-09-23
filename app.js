@@ -37,6 +37,8 @@
   if (!data.abilities.some(a => a.id === ArenaFartPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaFartPreset));
   if (!data.abilities.some(a => a.id === ArenaOrbPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaOrbPreset));
   if (!data.abilities.some(a => a.id === ArenaAskFightPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaAskFightPreset));
+  if (!data.abilities.some(a => a.id === ArenaBerserkPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaBerserkPreset));
+  if (!data.abilities.some(a => a.id === ArenaSpikeGuardPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaSpikeGuardPreset));
   data = validate(data, types);
   // Upgrade only the previous missile default; retain custom damage values.
   try {
@@ -207,7 +209,7 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
         battle.start(); $('event').textContent = '시작!';
       }
       updateUI();
-    } else if (battle.state === 'running') { accumulator += dt * Number($('speed').value); while (accumulator >= 1 / 120 && battle.state === 'running') { battle.step(1 / 120); for (const hit of battle.wallHits) wallSound.hit(hit.slot); for (const event of battle.audioEvents) { wallSound.play(event.type); if (effectsEnabled && event.type === 'missileLaunch') shake = Math.max(shake, .2); } accumulator -= 1 / 120; } updateUI(); }
+    } else if (battle.state === 'running') { accumulator += dt * Number($('speed').value); while (accumulator >= 1 / 120 && battle.state === 'running') { battle.step(1 / 120); for (const hit of battle.wallHits) wallSound.hit(hit.slot); for (const event of battle.audioEvents) { wallSound.play(event.type); if (effectsEnabled && event.type === 'missileLaunch') shake = Math.max(shake, .2); } if (effectsEnabled) shake = Math.max(shake, battle.shakeRequest); accumulator -= 1 / 120; } updateUI(); }
     shake = Math.max(0, shake - dt); tint = Math.max(0, tint - dt);
     feedback.forEach(hit => hit.life -= dt); feedback = feedback.filter(hit => hit.life > 0);
     if (battle.impactId > lastImpact) {
