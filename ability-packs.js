@@ -1038,20 +1038,25 @@
     return {x:self.x+Math.cos(a)*r,y:self.y+Math.sin(a)*r};
   }
 
-  function drawBall(ctx,x,y,r,rot,stretch){
+  function drawBall(ctx,x,y,r,rot,stretch,auraStrength){
     if(r<=.5)return;
     stretch=stretch||1;
+    auraStrength=auraStrength==null?100:auraStrength;
     ctx.save();
     ctx.translate(x,y);
 
-    // Soft aura behind the ball.
-    const glow=ctx.createRadialGradient(0,0,r*.4,0,0,r*2.1);
-    glow.addColorStop(0,'rgba(255,235,140,.55)');
-    glow.addColorStop(1,'rgba(255,235,140,0)');
-    ctx.fillStyle=glow;
-    ctx.beginPath();
-    ctx.arc(0,0,r*2.1,0,Math.PI*2);
-    ctx.fill();
+    // Purple aura behind the ball; strength (0-300%) controls both how bright and how big it glows.
+    if(auraStrength>0){
+      const glowAlpha=Math.min(1,auraStrength/100*.8);
+      const glowRadius=r*(1.4+auraStrength/100*1.1);
+      const glow=ctx.createRadialGradient(0,0,r*.3,0,0,glowRadius);
+      glow.addColorStop(0,'rgba(168,85,247,'+glowAlpha+')');
+      glow.addColorStop(1,'rgba(168,85,247,0)');
+      ctx.fillStyle=glow;
+      ctx.beginPath();
+      ctx.arc(0,0,glowRadius,0,Math.PI*2);
+      ctx.fill();
+    }
 
     ctx.rotate(rot);
     ctx.scale(stretch,1); // elongates along the rotated (flight) direction for a speed-streak look
@@ -1078,7 +1083,8 @@
       damage:field('공 1개당 피해',1,100,1,8),
       orbit:field('궤도 반경 / 캐릭터 반지름',1.2,4,.1,1.9),
       size:field('공 크기 / 캐릭터 반지름',.2,1.5,.05,.5),
-      speed:field('발사 속도',100,1200,10,520)
+      speed:field('발사 속도',100,1200,10,520),
+      auraStrength:field('아우라 강도 (%)',0,300,5,160)
     },
 
     cast(api,self,target,p,skill){
@@ -1132,6 +1138,7 @@
         s.angle=Math.atan2(dy,dx); // faces (and stretches toward) wherever it's currently homing
         if(l<=target.radius+r*.6){
           api.damage(target,e.damage,self);
+          api.sound('orbHit');
           s.life=0;
           continue;
         }
@@ -1156,13 +1163,13 @@
           ctx.fill();
         });
         ctx.globalAlpha=1;
-        drawBall(ctx,s.x,s.y,r,s.angle,1.4);
+        drawBall(ctx,s.x,s.y,r,s.angle,1.4,e.auraStrength);
       }
 
       if(self.hp<=0)return;
       e.orbs.forEach((o,i)=>{
         const p=orbPos(e,self,i);
-        drawBall(ctx,p.x,p.y,r*Math.min(1,o.age/ORB.grow),e.spin*1.3);
+        drawBall(ctx,p.x,p.y,r*Math.min(1,o.age/ORB.grow),e.spin*1.3,1,e.auraStrength);
       });
     }
   };
@@ -1172,7 +1179,7 @@
     name:'궤도 공',
     type:'orbBalls',
     cooldown:ORB.cooldown,
-    params:{count:3,damage:8,orbit:1.9,size:.5,speed:520}
+    params:{count:3,damage:8,orbit:1.9,size:.5,speed:520,auraStrength:160}
   };
 
   if(typeof document!=='undefined'){
