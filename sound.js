@@ -80,7 +80,7 @@
       oscillator.frequency.setValueAtTime(slot === 0 ? 330 : 290, now);
       oscillator.frequency.exponentialRampToValueAtTime(100, now + .045);
       gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(.16, now + .002);
+      gain.gain.linearRampToValueAtTime(.3, now + .002);
       gain.gain.exponentialRampToValueAtTime(.001, now + .075);
       oscillator.connect(gain); gain.connect(ctx.destination);
       oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
@@ -98,15 +98,15 @@
       } else if (type === 'missileExplosion') {
         this.sampleExplosion();
       } else if (type === 'bump') {
-        this.playOneShot('punch', .5);
+        this.playOneShot('punch', .68);
       } else if (type === 'noseHit') {
         this.playOneShot('sword', .8);
       } else if (type === 'orbHit') {
         this.playOneShot('punch', .65);
       } else if (type === 'sixThrow') {
-        this.playOneShot('six', .85);
+        this.playOneShot('six', .4);
       } else if (type === 'sevenThrow') {
-        this.playOneShot('seven', .85);
+        this.playOneShot('seven', .4);
       }
     }
     tone(from, to, duration, volume, type) {
