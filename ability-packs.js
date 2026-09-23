@@ -1333,7 +1333,7 @@
 (function(g){
   'use strict';
   const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
-  const CENTER=360, MOVE_DUR=.7, CINE_DUR=2;
+  const CENTER=360, MOVE_DUR=1.6, CINE_DUR=4.5;
   const breadBank=(api,self)=>api.shared('berserk-bread-'+self.slot,()=>({pieces:[],nextDrop:null,processedAt:-1,renderer:null}));
   const breadImage=typeof Image!=='undefined'&&g.ArenaMedia?new Image():null;
   if(breadImage) breadImage.src=g.ArenaMedia.bread;
@@ -1443,7 +1443,7 @@
       breadCount:field('빵 최대 개수',1,6,1,3),
       breadInterval:field('빵이 떨어지는 간격 (초)',.5,10,.5,2),
       breadSize:field('빵 크기',10,70,1,34),
-      awakenDuration:field('각성 지속 시간 (초, 변신 포함)',4,30,1,10),
+      awakenDuration:field('각성 지속 시간 (초, 변신 포함)',6,30,1,12),
       berserkDamage:field('돌진 피해',10,150,5,80),
       chargeSpeed:field('돌진 속도',200,1400,10,850),
       retreatSpeed:field('후퇴 속도',100,800,10,300),
@@ -1597,7 +1597,7 @@
     name:'각성 폭주',
     type:'berserk',
     cooldown:1,
-    params:{transformTime:30,damageReduction:40,breadHeal:15,breadCount:3,breadInterval:2,breadSize:34,awakenDuration:10,berserkDamage:80,chargeSpeed:850,retreatSpeed:300,cycleTime:.5}
+    params:{transformTime:30,damageReduction:40,breadHeal:15,breadCount:3,breadInterval:2,breadSize:34,awakenDuration:12,berserkDamage:80,chargeSpeed:850,retreatSpeed:300,cycleTime:.5}
   };
 })(globalThis);
 /* SPIKE GUARD v1 */
