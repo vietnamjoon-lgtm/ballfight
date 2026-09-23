@@ -1195,3 +1195,107 @@
     });
   }
 })(globalThis);
+/* ASK FIGHT v1 */
+/* Every cooldown: the caster stops and a short "?" speech bubble asks whether to fight. A 50/50 coin flip
+   decides, then one guaranteed-hit outcome plays out — approach + grab + punch, or a thrown laptop. Both
+   branches always land: the fight branch roots the target for the whole grab so it can't be dodged, and the
+   throw branch applies its hit on a timer rather than a physical collision check. */
+(function(g){
+  'use strict';
+  const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
+  const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+
+  g.ArenaAbilities.askFight={
+    label:'물어보고 공격',
+    description:'쿨타임마다 멈춰서 클로드에게 짧게 싸울지 물어봅니다. "싸운다"면 상대에게 다가가 붙잡고 얼굴을 때리고, "말라"면 노트북을 던져 확정적으로 맞힙니다. 반반 확률이며 둘 다 무조건 명중합니다.',
+    fields:{
+      damage:field('피해',1,100,1,22),
+      askTime:field('물어보는 시간 (초)',.2,2,.1,.6),
+      actionTime:field('행동 시간 (초)',.3,3,.1,.9)
+    },
+    cast(api,self,target,p){
+      self.rooted=true;
+      api.effect('askFight',self,{
+        ...p,
+        phase:'ask', age:0,
+        fight:api.random()<.5,
+        hit:false, locked:false,
+        startX:self.x, startY:self.y,
+        lapX:null, lapY:null, lapAngle:0
+      },p.askTime+p.actionTime+.3);
+    },
+    update(e,api,self,target,dt){
+      if(self.hp<=0||target.hp<=0){
+        self.rooted=false; target.rooted=false; e.remaining=0; return;
+      }
+      e.age+=dt;
+
+      if(e.phase==='ask'){
+        if(e.age>=e.askTime){ e.phase='act'; e.age=0; }
+        return;
+      }
+
+      if(e.fight){
+        if(!e.locked){
+          const angle=Math.atan2(target.y-self.y,target.x-self.x);
+          e.goalX=clamp(target.x-Math.cos(angle)*(target.radius+self.radius*.85),6+self.radius,714-self.radius);
+          e.goalY=clamp(target.y-Math.sin(angle)*(target.radius+self.radius*.85),6+self.radius,714-self.radius);
+          target.rooted=true;
+          e.locked=true;
+        }
+        const approachDur=e.actionTime*.45;
+        const at=Math.min(1,e.age/approachDur);
+        const ease=1-Math.pow(1-at,2);
+        self.x=e.startX+(e.goalX-e.startX)*ease;
+        self.y=e.startY+(e.goalY-e.startY)*ease;
+        if(!e.hit&&e.age>=approachDur+.12){
+          api.damage(target,e.damage,self);
+          api.sound('bump');
+          e.hit=true;
+        }
+        if(e.age>=e.actionTime){ self.rooted=false; target.rooted=false; }
+      }else{
+        const t=Math.min(1,e.age/e.actionTime);
+        e.lapX=e.startX+(target.x-e.startX)*t;
+        e.lapY=e.startY+(target.y-e.startY)*t;
+        e.lapAngle+=dt*10;
+        if(!e.hit&&t>=1){
+          api.damage(target,e.damage,self);
+          api.sound('bump');
+          e.hit=true;
+        }
+        if(e.age>=e.actionTime) self.rooted=false;
+      }
+    },
+    draw(ctx,e,self){
+      if(e.phase==='ask'){
+        const bx=self.x, by=self.y-self.radius-34;
+        ctx.fillStyle='#232530'; ctx.strokeStyle='#111'; ctx.lineWidth=2;
+        ctx.fillRect(bx-22,by-15,44,30); ctx.strokeRect(bx-22,by-15,44,30);
+        ctx.beginPath();
+        ctx.moveTo(bx-6,by+15); ctx.lineTo(bx,by+24); ctx.lineTo(bx+6,by+15);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#fff'; ctx.font='900 20px Arial, sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('?',bx,by+1);
+        return;
+      }
+      if(!e.fight&&e.lapX!=null){
+        ctx.save();
+        ctx.translate(e.lapX,e.lapY); ctx.rotate(e.lapAngle);
+        ctx.fillStyle='#2b2f38'; ctx.fillRect(-16,-2,32,10);
+        ctx.fillStyle='#1c1f26'; ctx.fillRect(-16,-22,32,20);
+        ctx.fillStyle='#7fd3ff'; ctx.fillRect(-13,-19,26,14);
+        ctx.restore();
+      }
+    }
+  };
+
+  g.ArenaAskFightPreset={
+    id:'pack_ask_fight_v1',
+    name:'물어보고 공격',
+    type:'askFight',
+    cooldown:6,
+    params:{damage:22,askTime:.6,actionTime:.9}
+  };
+})(globalThis);
