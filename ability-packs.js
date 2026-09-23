@@ -883,6 +883,7 @@
           angle:0,
           life:SIX_SEVEN.projectileLife
         });
+        api.sound(value===6?'sixThrow':'sevenThrow');
 
         e.thrown++;
         e.next+=e.interval;
