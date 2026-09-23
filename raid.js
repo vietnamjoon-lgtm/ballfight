@@ -466,6 +466,7 @@ function mount(){
     add(data.characters,g.ArenaNosePreset?.character);
     add(data.abilities,g.ArenaMissilePreset);
     add(data.abilities,g.ArenaFartPreset);
+    add(data.abilities,g.ArenaOrbPreset);
 
     if(g.ArenaPhonePack){
       g.ArenaPhonePack.abilities.forEach(a=>
