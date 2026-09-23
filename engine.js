@@ -36,7 +36,7 @@
   class Battle {
     constructor(config, selected, types = global.ArenaAbilities, random = Math.random) {
       this.types = types; this.config = validate(config, types); this.random = random;
-      this.sharedState = new Map(); this.audioEvents = []; this.wallHits = []; this.time = 0; this.state = 'ready'; this.winner = null; this.contactTimer = 0;
+      this.sharedState = new Map(); this.audioEvents = []; this.wallHits = []; this.shakeRequest = 0; this.time = 0; this.state = 'ready'; this.winner = null; this.contactTimer = 0;
       this.effects = []; this.impacts = []; this.impactId = 0; this.shots = []; this.particles = []; this.rings = []; this.orbits = []; this.events = []; this.eventId = 0;
       this.fighters = selected.map((id, slot) => {
         const c = this.config.characters.find(c => c.id === id); if (!c) throw Error('캐릭터를 선택하세요.');
@@ -51,6 +51,7 @@
         random: () => this.random(),
         shared: (key, create) => { if (!this.sharedState.has(key)) this.sharedState.set(key, create()); return this.sharedState.get(key); },
         sound: type => { if (this.audioEvents.length < 16) this.audioEvents.push({ type }); },
+        shake: amount => { this.shakeRequest = Math.max(this.shakeRequest, amount); },
         log: text => this.log(text),
         explosion: (target, amount, source) => this.damage(target, amount, source, 'explosion'),
         effect: (type, self, state, duration) => {
@@ -154,7 +155,7 @@
       return true;
     }
     step(dt) {
-      this.wallHits = []; this.audioEvents = [];
+      this.wallHits = []; this.audioEvents = []; this.shakeRequest = 0;
       if (this.state !== 'running') return;
       if (!(dt > 0 && dt <= 1 / 60)) throw Error('물리 계산은 1/60초 이하 간격으로 실행하세요.');
       this.time += dt; this.contactTimer = Math.max(0, this.contactTimer - dt);
