@@ -29,7 +29,9 @@
       if (equippedTypes.some((type, i) => types[type].uniquePerCharacter && equippedTypes.indexOf(type) !== i)) throw Error('이 자원 수집 능력은 캐릭터당 하나만 장착할 수 있습니다.');
       const image = c.image || '';
       if (typeof image !== 'string' || image.length > 1500000 || (image && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image))) throw Error('캐릭터 이미지는 작은 PNG·JPG·WebP 이미지여야 합니다.');
-      return { id: unique(c.id), name: text(c.name, '캐릭터 이름'), color: c.color, hp: number(c.hp, 10, 1000, '체력'), speed: number(c.speed, 50, 450, '이동 속도'), radius: number(c.radius, 12, 120, '크기'), contactDamage: number(c.contactDamage, 0, 100, '접촉 피해'), image, abilities: [...c.abilities] };
+      const image2 = c.image2 || '';
+      if (typeof image2 !== 'string' || image2.length > 1500000 || (image2 && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image2))) throw Error('각성 사진은 작은 PNG·JPG·WebP 이미지여야 합니다.');
+      return { id: unique(c.id), name: text(c.name, '캐릭터 이름'), color: c.color, hp: number(c.hp, 10, 1000, '체력'), speed: number(c.speed, 50, 450, '이동 속도'), radius: number(c.radius, 12, 120, '크기'), contactDamage: number(c.contactDamage, 0, 100, '접촉 피해'), image, image2, abilities: [...c.abilities] };
     });
     return { version: 1, abilities, characters };
   }
