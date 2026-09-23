@@ -23,7 +23,7 @@ function setupBerserk(sx, sy, tx, ty) {
   return { b, self, target, e };
 }
 const skill = () => ({ id: preset.id, params: preset.params });
-const CINE_FRAMES = Math.ceil(2 * 120) + 2;
+const CINE_FRAMES = Math.ceil(4.5 * 120) + 2;
 
 // Survive mode: damage reduction applies, status shows a countdown.
 {
