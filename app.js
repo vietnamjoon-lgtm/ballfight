@@ -36,6 +36,7 @@
   if (!data.abilities.some(a => a.id === ArenaMissilePreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaMissilePreset));
   if (!data.abilities.some(a => a.id === ArenaFartPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaFartPreset));
   if (!data.abilities.some(a => a.id === ArenaOrbPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaOrbPreset));
+  if (!data.abilities.some(a => a.id === ArenaAskFightPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaAskFightPreset));
   data = validate(data, types);
   // Upgrade only the previous missile default; retain custom damage values.
   try {
