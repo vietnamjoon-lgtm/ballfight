@@ -101,6 +101,8 @@
         this.playOneShot('punch', .5);
       } else if (type === 'noseHit') {
         this.playOneShot('sword', .8);
+      } else if (type === 'orbHit') {
+        this.playOneShot('punch', .65);
       }
     }
     tone(from, to, duration, volume, type) {
