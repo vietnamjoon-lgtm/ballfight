@@ -459,6 +459,7 @@ function mount(){
     }
     ctx.globalAlpha=1;
 
+    globalThis.ArenaDrawGas?.(ctx, battle);
     for(const f of battle.fighters){
       if(f.hp<=0)continue;
       circle(f.x,f.y,f.radius,f.color);
