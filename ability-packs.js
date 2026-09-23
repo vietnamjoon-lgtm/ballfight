@@ -1349,8 +1349,8 @@
     ctx.beginPath(); ctx.moveTo(1,-8); ctx.quadraticCurveTo(3,-1,0,6); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(10,-8); ctx.quadraticCurveTo(12,-2,9,4); ctx.stroke();
   };
-  const drawBread=(ctx,x,y,scale,rotation=-.25)=>{
-    ctx.save(); ctx.translate(x,y); ctx.rotate(rotation); ctx.scale(scale,scale);
+  const drawBread=(ctx,x,y,scale,rotation=-.25,size=34)=>{
+    ctx.save(); ctx.translate(x,y); ctx.rotate(rotation); ctx.scale(scale*size/34,scale*size/34);
     if(breadImage&&breadImage.complete&&breadImage.naturalWidth){
       const s=34; ctx.drawImage(breadImage,-s/2,-s/2,s,s);
     }else{
@@ -1369,6 +1369,7 @@
       breadHeal:field('빵 회복량',1,100,1,15),
       breadCount:field('빵 최대 개수',1,6,1,3),
       breadInterval:field('빵이 떨어지는 간격 (초)',.5,10,.5,2),
+      breadSize:field('빵 크기',10,70,1,34),
       damageMultiplier:field('각성 후 접촉 피해 배율',1,10,.5,4),
       chargeSpeed:field('돌진 속도',200,1400,10,850),
       retreatSpeed:field('후퇴 속도',100,800,10,300),
@@ -1450,7 +1451,7 @@
     },
     draw(ctx,e,self){
       if(e.bank&&e.bank.renderer===self.slot){
-        for(const p of e.bank.pieces) drawBread(ctx,p.x,p.y,1);
+        for(const p of e.bank.pieces) drawBread(ctx,p.x,p.y,1,-.25,e.breadSize);
       }
       if(e.eating){
         const scale=1-e.eating.bites*.3;
@@ -1458,7 +1459,7 @@
         const wobble=Math.sin(t*50)*.5-.25;
         const jx=Math.sin(t*70)*3, jy=Math.cos(t*65)*3;
         ctx.globalAlpha=Math.max(.15,scale);
-        drawBread(ctx,self.x+jx,self.y-self.radius-22+jy,Math.max(.3,scale),wobble);
+        drawBread(ctx,self.x+jx,self.y-self.radius-22+jy,Math.max(.3,scale),wobble,e.breadSize);
         ctx.globalAlpha=1;
       }
       if(!e.transformed) return;
@@ -1488,6 +1489,6 @@
     name:'각성 폭주',
     type:'berserk',
     cooldown:1,
-    params:{transformTime:30,damageReduction:40,breadHeal:15,breadCount:3,breadInterval:2,damageMultiplier:4,chargeSpeed:850,retreatSpeed:300,cycleTime:.5}
+    params:{transformTime:30,damageReduction:40,breadHeal:15,breadCount:3,breadInterval:2,breadSize:34,damageMultiplier:4,chargeSpeed:850,retreatSpeed:300,cycleTime:.5}
   };
 })(globalThis);
