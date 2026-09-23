@@ -1,8 +1,8 @@
-// Synthetic wall tap, missile launch/explosion, character bump, nose-hit and countdown-tick sounds. No background music.
+// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick and 6/7 throw sounds. No background music.
 (function (global) {
   'use strict';
   class ArenaWallSound {
-    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.samples = { missile: null, punch: null, sword: null, tick: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
+    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.samples = { missile: null, punch: null, sword: null, tick: null, six: null, seven: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
     loadMedia() {
       if (this.loading || !global.ArenaMedia || !this.context) return;
       const decode = key => {
@@ -11,8 +11,8 @@
         const bytes = Uint8Array.from(atob(media.split(',')[1]), c => c.charCodeAt(0));
         return this.context.decodeAudioData(bytes.buffer).catch(() => null);
       };
-      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick')]).then(([missile, punch, sword, tick]) => {
-        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick;
+      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick'), decode('six'), decode('seven')]).then(([missile, punch, sword, tick, six, seven]) => {
+        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick; this.samples.six = six; this.samples.seven = seven;
       });
     }
     setRate(rate) {
@@ -103,6 +103,10 @@
         this.playOneShot('sword', .8);
       } else if (type === 'orbHit') {
         this.playOneShot('punch', .65);
+      } else if (type === 'sixThrow') {
+        this.playOneShot('six', .85);
+      } else if (type === 'sevenThrow') {
+        this.playOneShot('seven', .85);
       }
     }
     tone(from, to, duration, volume, type) {
