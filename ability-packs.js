@@ -1006,3 +1006,167 @@
     });
   }
 })(globalThis);
+/* ORB BALLS v1 */
+(function(g){
+  'use strict';
+
+  const ORB = {
+    cooldown: 1.5,          // 편집 화면 쿨타임 = 공 생성 간격
+    ballPath: 'assets/orb-ball.png',
+    grow: .25,              // 새 공이 커지는 시간
+    shotLife: 3,            // 발사된 공 최대 비행 시간
+    spin: 3                 // 궤도 회전 속도 (라디안/초)
+  };
+
+  const field=(label,min,max,step,value)=>
+    ({label,min,max,step,default:value});
+  const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+
+  let ball=null;
+  if(typeof Image!=='undefined'){
+    ball=new Image();
+    ball.src=ORB.ballPath;
+  }
+
+  function orbPos(e,self,i){
+    const a=e.spin+i*Math.PI*2/e.count;
+    const r=self.radius*e.orbit;
+    return {x:self.x+Math.cos(a)*r,y:self.y+Math.sin(a)*r};
+  }
+
+  function drawBall(ctx,x,y,r,rot){
+    if(r<=.5)return;
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(rot);
+    if(ball&&ball.complete&&ball.naturalWidth){
+      ctx.drawImage(ball,-r,-r,r*2,r*2);
+    }else{
+      ctx.fillStyle='#fff';
+      ctx.strokeStyle='#e0c52c';
+      ctx.lineWidth=3;
+      ctx.beginPath();
+      ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.fill();ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  g.ArenaAbilities.orbBalls={
+    label:'궤도 공',
+    description:'쿨타임마다 공이 하나씩 생겨 캐릭터 주위를 돕니다. 개수가 다 차면 모든 공이 상대를 따라가 공격합니다.',
+    uniquePerCharacter:true,
+
+    fields:{
+      count:field('모이면 발사할 공 개수',1,8,1,3),
+      damage:field('공 1개당 피해',1,100,1,8),
+      orbit:field('궤도 반경 / 캐릭터 반지름',1.2,4,.1,1.9),
+      size:field('공 크기 / 캐릭터 반지름',.2,1.5,.05,.5),
+      speed:field('발사 속도',100,1200,10,520)
+    },
+
+    cast(api,self,target,p,skill){
+      const lock=api.shared(
+        'orb-balls-'+self.slot,
+        ()=>({active:false})
+      );
+      if(lock.active)return;
+      lock.active=true;
+
+      api.effect('orbBalls',self,{
+        ...p,
+        interval:skill?.cooldown||ORB.cooldown,
+        timer:0,
+        spin:0,
+        orbs:[{age:0}],
+        shots:[]
+      },121);
+    },
+
+    update(e,api,self,target,dt){
+      e.spin+=ORB.spin*dt;
+      e.orbs.forEach(o=>o.age+=dt);
+
+      if(self.hp>0){
+        e.timer+=dt;
+        if(e.timer>=e.interval&&e.orbs.length<e.count){
+          e.timer-=e.interval;
+          e.orbs.push({age:0});
+        }
+        if(e.orbs.length<e.count)e.timer=Math.min(e.timer,e.interval);
+        else e.timer=0;
+
+        const last=e.orbs[e.orbs.length-1];
+        if(e.orbs.length>=e.count&&last.age>=ORB.grow){
+          for(let i=0;i<e.orbs.length;i++){
+            const p=orbPos(e,self,i);
+            e.shots.push({x:p.x,y:p.y,life:ORB.shotLife,trail:[]});
+          }
+          e.orbs=[];
+          e.timer=0;
+        }
+      }
+
+      const r=self.radius*e.size;
+      for(const s of e.shots){
+        s.life-=dt;
+        if(target.hp<=0){s.life=0;continue;}
+        const dx=target.x-s.x,dy=target.y-s.y;
+        const l=Math.hypot(dx,dy)||1;
+        if(l<=target.radius+r*.6){
+          api.damage(target,e.damage,self);
+          s.life=0;
+          continue;
+        }
+        s.trail.push([s.x,s.y]);
+        if(s.trail.length>8)s.trail.shift();
+        const step=Math.min(l,e.speed*dt);
+        s.x=clamp(s.x+dx/l*step,6+r,714-r);
+        s.y=clamp(s.y+dy/l*step,6+r,714-r);
+      }
+      e.shots=e.shots.filter(s=>s.life>0);
+    },
+
+    draw(ctx,e,self){
+      const r=self.radius*e.size;
+
+      for(const s of e.shots){
+        s.trail.forEach((p,i)=>{
+          ctx.globalAlpha=i/20;
+          ctx.fillStyle='#e6dc3c';
+          ctx.beginPath();
+          ctx.arc(p[0],p[1],r*.7*i/8,0,Math.PI*2);
+          ctx.fill();
+        });
+        ctx.globalAlpha=1;
+        drawBall(ctx,s.x,s.y,r,e.spin*4);
+      }
+
+      if(self.hp<=0)return;
+      e.orbs.forEach((o,i)=>{
+        const p=orbPos(e,self,i);
+        drawBall(ctx,p.x,p.y,r*Math.min(1,o.age/ORB.grow),e.spin*1.3);
+      });
+    }
+  };
+
+  g.ArenaOrbPreset={
+    id:'pack_orb_balls_v1',
+    name:'궤도 공',
+    type:'orbBalls',
+    cooldown:ORB.cooldown,
+    params:{count:3,damage:8,orbit:1.9,size:.5,speed:520}
+  };
+
+  if(typeof document!=='undefined'){
+    document.addEventListener('DOMContentLoaded',()=>{
+      const type=document.getElementById('ability-type');
+      type?.addEventListener('change',()=>{
+        if(type.value==='orbBalls'){
+          document.getElementById('ability-cooldown').value=
+            ORB.cooldown;
+        }
+      });
+    });
+  }
+})(globalThis);
