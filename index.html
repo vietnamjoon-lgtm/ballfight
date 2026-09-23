@@ -6,16 +6,16 @@
   <title>BOUNCE / 나만의 원형 배틀</title>
 
   <link rel="stylesheet" href="styles.css">
-  <script src="media.js?v=berserk-v3-2" defer></script>
+  <script src="media.js?v=photo-swap-1" defer></script>
   <script src="abilities.js" defer></script>
-  <script src="ability-packs.js?v=berserk-v3-2" defer></script>
-  <script src="missile-ability.js?v=berserk-v3-2" defer></script>
+  <script src="ability-packs.js?v=photo-swap-1" defer></script>
+  <script src="missile-ability.js?v=photo-swap-1" defer></script>
   <script src="characters.js" defer></script>
-  <script src="engine.js?v=berserk-v3-2" defer></script>
-  <script src="sound.js?v=berserk-v3-2" defer></script>
+  <script src="engine.js?v=photo-swap-1" defer></script>
+  <script src="sound.js?v=photo-swap-1" defer></script>
   <script src="countdown.js" defer></script>
-  <script src="app.js?v=berserk-v3-2" defer></script>
-  <script src="raid.js?v=berserk-v3-2" defer></script>
+  <script src="app.js?v=photo-swap-1" defer></script>
+  <script src="raid.js?v=photo-swap-1" defer></script>
 </head>
 <body>
 <main>
@@ -209,6 +209,27 @@
 
           <p class="hint">
             사진은 원 안에 잘라 표시됩니다. 최대 1MB.
+          </p>
+
+          <div class="portrait-row">
+            <div id="portrait2" aria-label="각성 사진 미리보기"></div>
+
+            <label class="file-button">
+              각성 사진 선택
+              <input
+                id="character-image2"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+              >
+            </label>
+
+            <button id="clear-image2" type="button" class="small">
+              사진 빼기
+            </button>
+          </div>
+
+          <p class="hint">
+            각성 폭주 같은 능력으로 변신하는 동안 대신 보여줄 사진입니다. 없으면 원래 사진을 계속 씁니다.
           </p>
 
           <label>
