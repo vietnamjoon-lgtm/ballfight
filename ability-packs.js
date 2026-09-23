@@ -103,3 +103,399 @@
   };
   global.ArenaFartPreset = { id: 'pack_fart_v1', name: '방구 흔적', type: 'fart', cooldown: 5, params: { damage: 5, radius: 26, trailTime: 3, puffDuration: 4 } };
 })(globalThis);
+/* PHONE PACK v1 */
+(function (g) {
+  'use strict';
+  if (g.ArenaPhonePack) return;
+  const A = g.ArenaAbilities;
+  const field = (label, min, max, value) =>
+    ({ label, min, max, step: 1, default: value });
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  function spot(api, self, target, items = []) {
+    for (let i = 0; i < 60; i++) {
+      const p = {
+        x: 42 + api.random() * 636,
+        y: 42 + api.random() * 636
+      };
+      if (
+        distance(p, self) > self.radius + 65 &&
+        distance(p, target) > target.radius + 65 &&
+        items.every(v => distance(p, v) > 110)
+      ) return p;
+    }
+    return null;
+  }
+
+  function disk(c, x, y, r, color) {
+    c.fillStyle = color;
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  function wifi(c, x, y, color) {
+    c.strokeStyle = color;
+    c.lineWidth = 4;
+    for (const r of [10, 19, 28]) {
+      c.beginPath();
+      c.arc(x, y, r, -2.35, -.79);
+      c.stroke();
+    }
+    disk(c, x, y, 3, color);
+  }
+
+  A.phoneThrow = {
+    label: '핸드폰 던지기',
+    description: '이동 방향으로 던집니다. 유도 없이 직진하고 충돌하거나 사거리가 끝나면 깨집니다.',
+    fields: {
+      damage: field('피해', 1, 100, 20),
+      speed: field('비행 속도', 100, 1200, 560),
+      range: field('사거리', 80, 1000, 600)
+    },
+    cast(api, self, target, p) {
+      const angle = Math.atan2(self.vy, self.vx);
+      api.effect('phoneThrow', self, {
+        ...p,
+        x: self.x,
+        y: self.y,
+        vx: Math.cos(angle) * p.speed,
+        vy: Math.sin(angle) * p.speed,
+        angle,
+        travel: 0,
+        broken: false,
+        fade: .65
+      }, p.range / p.speed + .8);
+    },
+    update(e, api, self, target, dt) {
+      if (e.broken) {
+        e.fade -= dt;
+        if (e.fade <= 0) e.remaining = 0;
+        return;
+      }
+      const x = e.x, y = e.y;
+      const step = Math.min(e.speed * dt, e.range - e.travel);
+      const dx = e.vx / e.speed * step;
+      const dy = e.vy / e.speed * step;
+
+      let wall = 1;
+      if (dx > 0) wall = Math.min(wall, (700 - x) / dx);
+      if (dx < 0) wall = Math.min(wall, (20 - x) / dx);
+      if (dy > 0) wall = Math.min(wall, (700 - y) / dy);
+      if (dy < 0) wall = Math.min(wall, (20 - y) / dy);
+      wall = Math.max(0, wall);
+
+      const sx = dx * wall, sy = dy * wall;
+      const length2 = sx * sx + sy * sy;
+      const t = length2 ? Math.max(0, Math.min(1,
+        ((target.x - x) * sx + (target.y - y) * sy) / length2
+      )) : 0;
+      const hit = Math.hypot(
+        target.x - x - sx * t,
+        target.y - y - sy * t
+      ) <= target.radius + 14;
+
+      e.x += sx * (hit ? t : 1);
+      e.y += sy * (hit ? t : 1);
+      e.travel += step * wall;
+      e.angle += dt * 11;
+
+      if (hit) {
+        api.damage(target, e.damage, self);
+        api.pushAway(target, self);
+      }
+      if (hit || wall < 1 || e.travel >= e.range - .001) {
+        e.broken = true;
+        e.remaining = .7;
+      }
+    },
+    draw(c, e) {
+      c.save();
+      c.translate(e.x, e.y);
+      c.rotate(e.angle);
+      c.globalAlpha = e.broken ? Math.max(0, e.fade / .65) : 1;
+
+      c.fillStyle = '#141820';
+      c.fillRect(-12, -23, 24, 46);
+      c.fillStyle = e.broken ? '#27313d' : '#eaf7ff';
+      c.fillRect(-9, -19, 18, 37);
+      c.fillStyle = '#141820';
+      c.fillRect(-5, -20, 10, 4);
+
+      if (e.broken) {
+        c.strokeStyle = '#fff';
+        c.lineWidth = 1.4;
+        const spread = (1 - e.fade / .65) * 45;
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI / 4;
+          c.beginPath();
+          c.moveTo(0, 0);
+          c.lineTo(Math.cos(a) * 10, Math.sin(a) * 21);
+          c.stroke();
+          c.fillStyle = i % 2 ? '#6fa1be' : '#222';
+          c.fillRect(
+            Math.cos(a) * (18 + spread),
+            Math.sin(a) * (25 + spread),
+            4, 7
+          );
+        }
+      }
+      c.restore();
+    }
+  };
+
+  A.supplementPickup = {
+    label: '영양제 주워 먹기',
+    description: '주기적으로 영양제가 떨어집니다. 주인만 주워 회복하며 최대 체력을 넘지 않습니다.',
+    uniquePerCharacter: true,
+    fields: {
+      heal: field('회복량', 1, 100, 15),
+      maxItems: field('바닥 최대 개수', 1, 6, 3),
+      lifetime: field('영양제 유지 시간', 3, 30, 15)
+    },
+    cast(api, self, target, p, skill) {
+      const state = api.shared(
+        'phone-vitamins-' + self.slot,
+        () => ({ active: false })
+      );
+      if (state.active) return;
+      state.active = true;
+      api.effect('supplementPickup', self, {
+        ...p,
+        interval: skill.cooldown,
+        timer: 0,
+        items: []
+      }, 121);
+    },
+    update(e, api, self, target, dt) {
+      e.items.forEach(v => v.life -= dt);
+      e.items = e.items.filter(v => {
+        if (v.life <= 0) return false;
+        if (distance(v, self) <= self.radius + 15) {
+          api.heal(self, e.heal);
+          return false;
+        }
+        return true;
+      });
+
+      e.timer -= dt;
+      if (e.timer <= 0) {
+        e.timer += e.interval;
+        if (e.items.length < e.maxItems) {
+          const p = spot(api, self, target, e.items);
+          if (p) e.items.push({ ...p, life: e.lifetime });
+        }
+      }
+    },
+    draw(c, e) {
+      for (const v of e.items) {
+        c.save();
+        c.translate(v.x, v.y);
+        disk(c, 0, 0, 22, '#e1f7e7');
+        c.fillStyle = '#f6bd45';
+        c.fillRect(-11, -10, 22, 27);
+        c.fillStyle = '#38764c';
+        c.fillRect(-10, -17, 20, 8);
+        c.fillStyle = '#fff';
+        c.fillRect(-8, -3, 16, 14);
+        c.fillStyle = '#328c52';
+        c.font = 'bold 15px sans-serif';
+        c.textAlign = 'center';
+        c.fillText('+', 0, 9);
+        c.restore();
+      }
+    }
+  };
+
+  A.hotspotRequest = {
+    label: '하스팟 줘!',
+    description: '상대가 제한 시간 안에 하스팟을 줍지 않으면 파장이 퍼집니다. 파장에 닿으면 한 번 피해를 입습니다.',
+    uniquePerCharacter: true,
+    fields: {
+      damage: field('파장 피해', 1, 100, 30),
+      wait: field('줍기 제한 시간', 1, 10, 4),
+      range: field('파장 최대 범위', 100, 1000, 650)
+    },
+    cast(api, self, target, p) {
+      const lock = api.shared(
+        'phone-hotspot-' + self.slot,
+        () => ({ until: 0 })
+      );
+      if (api.now() < lock.until) return;
+      const pos = spot(api, self, target);
+      if (!pos) return;
+      lock.until = api.now() + p.wait + 1.3;
+      api.effect('hotspotRequest', self, {
+        ...p,
+        ...pos,
+        age: 0,
+        phase: 'wait',
+        radius: 0,
+        hit: false
+      }, p.wait + 1.3);
+    },
+    update(e, api, self, target, dt) {
+      e.age += dt;
+      if (e.phase === 'wait') {
+        if (
+          e.age <= e.wait &&
+          distance(e, target) <= target.radius + 18
+        ) {
+          api.log(target.name + ' · 하스팟 수령! 공격 취소');
+          e.remaining = 0;
+          return;
+        }
+        if (e.age < e.wait) return;
+        e.phase = 'wave';
+        api.log(self.name + ' · 하스팟 안 먹었지!');
+      }
+
+      const previous = e.radius;
+      e.radius = Math.min(
+        e.range,
+        Math.max(0, e.age - e.wait) / 1.2 * e.range
+      );
+      const d = distance(e, target);
+      if (
+        !e.hit &&
+        d + target.radius >= previous &&
+        d - target.radius <= e.radius
+      ) {
+        e.hit = true;
+        api.damage(target, e.damage, self);
+        api.pushAway(target, e);
+      }
+    },
+    draw(c, e, self) {
+      if (e.phase === 'wait') {
+        disk(c, e.x, e.y, 26, '#e3f2ff');
+        wifi(c, e.x, e.y + 10, '#2485d5');
+        c.textAlign = 'center';
+        c.fillStyle = '#205c96';
+        c.font = 'bold 16px sans-serif';
+        c.fillText(
+          Math.max(0, Math.ceil(e.wait - e.age)) + '초',
+          e.x, e.y + 46
+        );
+
+        if (e.age < 2) {
+          const x = Math.max(80, Math.min(640, self.x));
+          const y = Math.max(30, self.y - self.radius - 30);
+          c.fillStyle = '#fff';
+          c.strokeStyle = '#222';
+          c.lineWidth = 2;
+          c.fillRect(x - 74, y - 22, 148, 36);
+          c.strokeRect(x - 74, y - 22, 148, 36);
+          c.fillStyle = '#222';
+          c.font = 'bold 20px sans-serif';
+          c.fillText('하스팟 줘!', x, y + 3);
+        }
+      } else {
+        c.strokeStyle = '#268bdf';
+        c.lineWidth = 6;
+        c.globalAlpha = Math.max(
+          0, 1 - (e.age - e.wait) / 1.3
+        );
+        for (const offset of [0, 30, 60]) {
+          const r = e.radius - offset;
+          if (r <= 0) continue;
+          c.beginPath();
+          c.arc(e.x, e.y, r, 0, Math.PI * 2);
+          c.stroke();
+        }
+        c.globalAlpha = 1;
+      }
+    }
+  };
+
+  const pack = g.ArenaPhonePack = {
+    abilities: [
+      {
+        id: 'phone_throw_v1',
+        name: '핸드폰 던지기',
+        type: 'phoneThrow',
+        cooldown: 3,
+        params: { damage: 20, speed: 560, range: 600 }
+      },
+      {
+        id: 'phone_vitamins_v1',
+        name: '영양제 주워 먹기',
+        type: 'supplementPickup',
+        cooldown: 5,
+        params: { heal: 15, maxItems: 3, lifetime: 15 }
+      },
+      {
+        id: 'phone_hotspot_v1',
+        name: '하스팟 줘!',
+        type: 'hotspotRequest',
+        cooldown: 10,
+        params: { damage: 30, wait: 4, range: 650 }
+      }
+    ],
+    character: {
+      id: 'phone_user_v1',
+      name: '하스팟 줘',
+      color: '#8fbbea',
+      hp: 200,
+      speed: 300,
+      radius: 42,
+      contactDamage: 5,
+      image: '',
+      abilities: [
+        'phone_throw_v1',
+        'phone_vitamins_v1',
+        'phone_hotspot_v1'
+      ]
+    }
+  };
+
+  if (typeof document === 'undefined') return;
+  document.addEventListener('DOMContentLoaded', () => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = '핸드폰 3스킬 JSON 다운로드';
+    button.style.cssText =
+      'display:block;margin:16px auto;padding:14px;' +
+      'background:#1969ad;color:white;border:0;' +
+      'border-radius:10px;font-size:16px';
+
+    button.onclick = () => {
+      try {
+        const saved = localStorage.getItem('bounce.roster.v1');
+        const data = JSON.parse(
+          saved || JSON.stringify(g.ArenaDefaults)
+        );
+
+        function add(list, item) {
+          if (item && !list.some(v => v.id === item.id)) {
+            list.push(item);
+          }
+        }
+
+        add(data.abilities, g.ArenaNosePreset?.ability);
+        add(data.characters, g.ArenaNosePreset?.character);
+        add(data.abilities, g.ArenaMissilePreset);
+        add(data.abilities, g.ArenaFartPreset);
+        pack.abilities.forEach(a => add(data.abilities, a));
+        add(data.characters, pack.character);
+
+        const clean = g.ArenaEngine.validate(data, A);
+        const url = URL.createObjectURL(new Blob(
+          [JSON.stringify(clean, null, 2)],
+          { type: 'application/json' }
+        ));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'phone-skills.json';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (error) {
+        alert('JSON 생성 실패: ' + error.message);
+      }
+    };
+
+    document.body.append(button);
+  });
+})(globalThis);
