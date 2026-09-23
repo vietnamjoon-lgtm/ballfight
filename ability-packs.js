@@ -661,3 +661,348 @@
 
   skill.draw = function () {};
 })(globalThis);
+/* SIX SEVEN v1 */
+(function(g){
+  'use strict';
+
+  const SIX_SEVEN = {
+    cooldown: 6,
+    duration: 1.5,
+    shakePeriod: .7,
+    handScale: 2 / 3,
+    pairs: 2,
+    interval: .35,
+    numberSize: 38,
+    projectileSpeed: 560,
+    projectileLife: 2.5,
+    handPath: 'assets/six-seven-hand.jpg',
+    fade: .25
+  };
+
+  const field=(label,min,max,step,value)=>
+    ({label,min,max,step,default:value});
+  const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+
+  let hand=null;
+
+  if(typeof Image!=='undefined'&&typeof document!=='undefined'){
+    const image=new Image();
+    image.onload=()=>{
+      const canvas=document.createElement('canvas');
+      canvas.width=256;
+      canvas.height=Math.round(
+        256*image.naturalHeight/image.naturalWidth
+      );
+      const c=canvas.getContext('2d');
+      c.drawImage(image,0,0,canvas.width,canvas.height);
+
+      try{
+        const pixels=c.getImageData(
+          0,0,canvas.width,canvas.height
+        );
+        for(let i=0;i<pixels.data.length;i+=4){
+          const white=Math.min(
+            pixels.data[i],
+            pixels.data[i+1],
+            pixels.data[i+2]
+          );
+          pixels.data[i+3]*=1-clamp((white-225)/30,0,1);
+        }
+        c.putImageData(pixels,0,0);
+        hand=canvas;
+      }catch{
+        hand=image;
+      }
+    };
+    image.src=SIX_SEVEN.handPath;
+  }
+
+  function fade(e){
+    if(e.age>e.active)return 0;
+    return Math.min(
+      1,
+      e.age/.12,
+      Math.max(0,(e.active-e.age)/SIX_SEVEN.fade)
+    );
+  }
+
+  function bob(e,self){
+    return -self.radius*.07*
+      (.5+.5*Math.cos(e.age/e.shakePeriod*Math.PI*4))*
+      fade(e);
+  }
+
+  function handPoint(e,self,left){
+    const phase=
+      Math.cos(e.age/e.shakePeriod*Math.PI*2)*
+      (left?1:-1);
+    return {
+      x:self.x+(left?-1:1)*self.radius*.78,
+      y:self.y+self.radius*.85-
+        phase*self.radius*.3+bob(e,self),
+      phase
+    };
+  }
+
+  g.Arena67BodyOffset=(self,battle)=>{
+    let offset=0;
+    for(const e of battle.effects){
+      if(e.type==='sixSeven'&&e.owner===self.slot){
+        offset=Math.min(offset,bob(e,self));
+      }
+    }
+    return offset;
+  };
+
+  function fallbackHand(ctx,w,h){
+    ctx.fillStyle='#ffd457';
+    ctx.strokeStyle='#cb912b';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.ellipse(0,-h*.28,w*.36,h*.27,0,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
+
+    for(let i=0;i<4;i++){
+      ctx.beginPath();
+      ctx.ellipse(
+        (i-1.5)*w*.17,-h*.05,
+        w*.095,h*.2,0,0,Math.PI*2
+      );
+      ctx.fill();ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.ellipse(
+      -w*.38,-h*.32,w*.2,h*.1,-.3,0,Math.PI*2
+    );
+    ctx.fill();ctx.stroke();
+  }
+
+  function number(ctx,value,x,y,size,alpha=1,angle=0){
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(angle);
+    ctx.globalAlpha=alpha;
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.font='900 '+size+'px Arial, sans-serif';
+    ctx.lineJoin='round';
+    ctx.lineWidth=Math.max(2,size*.08);
+    ctx.strokeStyle='#20252d';
+    ctx.fillStyle=value===6?'#ffd84e':'#73d6ff';
+    ctx.strokeText(String(value),0,0);
+    ctx.fillText(String(value),0,0);
+    ctx.restore();
+  }
+
+  g.ArenaAbilities.sixSeven={
+    label:'6 7 던지기',
+    description:'6→7을 번갈아 던집니다. 피해는 각각 6·7로 고정됩니다. 반복 횟수는 6→7 한 쌍 기준이며, 던지기가 길면 연출도 자동 연장됩니다.',
+    uniquePerCharacter:true,
+
+    fields:{
+      pairs:field(
+        '한 사이클의 6→7 반복 횟수',
+        1,12,1,SIX_SEVEN.pairs
+      ),
+      interval:field(
+        '숫자 던지는 간격 (초)',
+        .06,2,.01,SIX_SEVEN.interval
+      ),
+      numberSize:field(
+        '던지는 숫자 크기',
+        16,100,1,SIX_SEVEN.numberSize
+      ),
+      projectileSpeed:field(
+        '숫자 비행 속도',
+        100,1200,10,SIX_SEVEN.projectileSpeed
+      ),
+      duration:field(
+        '최소 연출 시간 (초)',
+        .5,10,.1,SIX_SEVEN.duration
+      ),
+      shakePeriod:field(
+        '손 왕복 시간 (초)',
+        .2,2,.05,SIX_SEVEN.shakePeriod
+      ),
+      handScale:field(
+        '손 크기 / 캐릭터 지름',
+        .3,1.5,.05,SIX_SEVEN.handScale
+      )
+    },
+
+    cast(api,self,target,p){
+      const lock=api.shared(
+        'six-seven-'+self.slot,
+        ()=>({until:0})
+      );
+      if(api.now()<lock.until)return;
+
+      const active=Math.max(
+        p.duration,(p.pairs*2-1)*p.interval+.3
+      );
+      lock.until=api.now()+active;
+
+      api.effect('sixSeven',self,{
+        ...p,
+        active,
+        age:0,
+        thrown:0,
+        next:0,
+        shots:[],
+        sparks:[]
+      },active+SIX_SEVEN.projectileLife+.25);
+    },
+
+    update(e,api,self,target,dt){
+      e.age+=dt;
+
+      while(
+        self.hp>0&&
+        e.thrown<e.pairs*2&&
+        e.age+1e-8>=e.next
+      ){
+        const left=e.thrown%2===0;
+        const value=left?6:7;
+        const point=handPoint(e,self,left);
+        const radius=e.numberSize*.32;
+
+        const x=clamp(point.x,6+radius,714-radius);
+        const y=clamp(
+          point.y-e.numberSize*.6,6+radius,714-radius
+        );
+        const angle=Math.atan2(target.y-y,target.x-x);
+
+        e.shots.push({
+          x,y,
+          vx:Math.cos(angle)*e.projectileSpeed,
+          vy:Math.sin(angle)*e.projectileSpeed,
+          value,
+          radius,
+          spin:left?-1:1,
+          angle:0,
+          life:SIX_SEVEN.projectileLife
+        });
+
+        e.thrown++;
+        e.next+=e.interval;
+      }
+
+      for(const s of e.shots){
+        const x=s.x,y=s.y;
+        let dx=s.vx*dt,dy=s.vy*dt,wall=1;
+        const lo=6+s.radius,hi=714-s.radius;
+
+        if(dx>0)wall=Math.min(wall,(hi-x)/dx);
+        if(dx<0)wall=Math.min(wall,(lo-x)/dx);
+        if(dy>0)wall=Math.min(wall,(hi-y)/dy);
+        if(dy<0)wall=Math.min(wall,(lo-y)/dy);
+
+        wall=clamp(wall,0,1);
+        dx*=wall;
+        dy*=wall;
+
+        const n=dx*dx+dy*dy;
+        const t=n?clamp(
+          ((target.x-x)*dx+(target.y-y)*dy)/n,0,1
+        ):0;
+
+        const hit=target.hp>0&&Math.hypot(
+          target.x-x-dx*t,
+          target.y-y-dy*t
+        )<=target.radius+s.radius;
+
+        s.x+=dx*(hit?t:1);
+        s.y+=dy*(hit?t:1);
+        s.angle+=s.spin*dt*1.5;
+        s.life-=dt;
+
+        if(hit){
+          api.damage(target,s.value,self);
+          e.sparks.push({
+            x:s.x,y:s.y,value:s.value,life:.25
+          });
+        }
+        if(hit||wall<1)s.life=0;
+      }
+
+      e.shots=e.shots.filter(s=>s.life>0);
+      e.sparks.forEach(s=>s.life-=dt);
+      e.sparks=e.sparks.filter(s=>s.life>0);
+    },
+
+    draw(ctx,e,self){
+      const opacity=fade(e);
+
+      if(opacity>0){
+        const w=self.radius*2*e.handScale;
+        const h=hand?w*hand.height/hand.width:w*.85;
+
+        for(const left of [true,false]){
+          const p=handPoint(e,self,left);
+          ctx.save();
+          ctx.translate(p.x,p.y);
+          if(!left)ctx.scale(-1,1);
+          ctx.globalAlpha=opacity;
+
+          if(hand){
+            ctx.drawImage(hand,-w/2,-h*.15,w,h);
+          }else{
+            fallbackHand(ctx,w,h);
+          }
+          ctx.restore();
+
+          const raised=(p.phase+1)/2;
+          number(
+            ctx,left?6:7,
+            p.x,p.y-h*.35,
+            e.numberSize*(.6+raised*.5),
+            opacity*(.2+raised*.8)
+          );
+        }
+      }
+
+      for(const s of e.shots){
+        number(
+          ctx,s.value,s.x,s.y,e.numberSize,
+          Math.min(1,s.life/.2),s.angle
+        );
+      }
+
+      for(const s of e.sparks){
+        ctx.save();
+        ctx.globalAlpha=s.life/.25;
+        ctx.strokeStyle=s.value===6?'#ffcb32':'#4cbce9';
+        ctx.lineWidth=3;
+
+        const r=8+(1-s.life/.25)*28;
+        for(let i=0;i<6;i++){
+          const a=i*Math.PI/3;
+          ctx.beginPath();
+          ctx.moveTo(
+            s.x+Math.cos(a)*r,
+            s.y+Math.sin(a)*r
+          );
+          ctx.lineTo(
+            s.x+Math.cos(a)*(r+8),
+            s.y+Math.sin(a)*(r+8)
+          );
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+  };
+
+  if(typeof document!=='undefined'){
+    document.addEventListener('DOMContentLoaded',()=>{
+      const type=document.getElementById('ability-type');
+      type?.addEventListener('change',()=>{
+        if(type.value==='sixSeven'){
+          document.getElementById('ability-cooldown').value=
+            SIX_SEVEN.cooldown;
+        }
+      });
+    });
+  }
+})(globalThis);
