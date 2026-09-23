@@ -1007,6 +1007,10 @@
   }
 })(globalThis);
 /* ORB BALLS v1 */
+/* Moved here from app.js: it was previously defined AFTER app.js's own setup IIFE had already run (same
+   script-load order problem app.js's other presets avoid by living in files that load before app.js), so
+   ArenaAbilities.orbBalls and ArenaOrbPreset didn't exist yet when the ability-type dropdown and default
+   roster were built — the ability was registered too late to ever be selectable or equipped. */
 (function(g){
   'use strict';
 
@@ -1015,7 +1019,7 @@
     ballPath: 'assets/orb-ball.png',
     grow: .25,              // 새 공이 커지는 시간
     shotLife: 3,            // 발사된 공 최대 비행 시간
-    spin: 3                 // 궤도 회전 속도 (라디안/초)
+    spin: 3                 // 궤도 회전 속도
   };
 
   const field=(label,min,max,step,value)=>
