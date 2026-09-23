@@ -443,6 +443,7 @@ function mount(){
   sound.last=Array(8).fill(-Infinity);
 
   const images=new Map();
+  const images2=new Map();
   let config,battle,countdown=null,frameId=0,last=0,acc=0;
   let seenImpact=0,shake=0,tick=0;
 
@@ -654,7 +655,8 @@ function mount(){
 
       circle(f.x,f.y,f.radius,f.color);
 
-      const img=images.get(f.id);
+      const awakened=f.skills.some(s=>g.ArenaAbilities[s.type].photo?.(f,s)==='secondary');
+      const img=(awakened&&images2.get(f.id))||images.get(f.id);
       if(img?.complete&&img.naturalWidth){
         const side=Math.min(
           img.naturalWidth,img.naturalHeight
@@ -866,12 +868,18 @@ function mount(){
       }
 
       images.clear();
+      images2.clear();
 
       for(const c of config.characters){
         if(c.image){
           const img=new Image();
           img.src=c.image;
           images.set(c.id,img);
+        }
+        if(c.image2){
+          const img2=new Image();
+          img2.src=c.image2;
+          images2.set(c.id,img2);
         }
       }
 
