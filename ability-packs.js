@@ -1038,17 +1038,29 @@
     return {x:self.x+Math.cos(a)*r,y:self.y+Math.sin(a)*r};
   }
 
-  function drawBall(ctx,x,y,r,rot){
+  function drawBall(ctx,x,y,r,rot,stretch){
     if(r<=.5)return;
+    stretch=stretch||1;
     ctx.save();
     ctx.translate(x,y);
+
+    // Soft aura behind the ball.
+    const glow=ctx.createRadialGradient(0,0,r*.4,0,0,r*2.1);
+    glow.addColorStop(0,'rgba(255,235,140,.55)');
+    glow.addColorStop(1,'rgba(255,235,140,0)');
+    ctx.fillStyle=glow;
+    ctx.beginPath();
+    ctx.arc(0,0,r*2.1,0,Math.PI*2);
+    ctx.fill();
+
     ctx.rotate(rot);
+    ctx.scale(stretch,1); // elongates along the rotated (flight) direction for a speed-streak look
     if(ball&&ball.complete&&ball.naturalWidth){
       ctx.drawImage(ball,-r,-r,r*2,r*2);
     }else{
       ctx.fillStyle='#fff';
       ctx.strokeStyle='#e0c52c';
-      ctx.lineWidth=3;
+      ctx.lineWidth=3/stretch;
       ctx.beginPath();
       ctx.arc(0,0,r,0,Math.PI*2);
       ctx.fill();ctx.stroke();
@@ -1104,7 +1116,7 @@
         if(e.orbs.length>=e.count&&last.age>=ORB.grow){
           for(let i=0;i<e.orbs.length;i++){
             const p=orbPos(e,self,i);
-            e.shots.push({x:p.x,y:p.y,life:ORB.shotLife,trail:[]});
+            e.shots.push({x:p.x,y:p.y,life:ORB.shotLife,trail:[],angle:0});
           }
           e.orbs=[];
           e.timer=0;
@@ -1117,6 +1129,7 @@
         if(target.hp<=0){s.life=0;continue;}
         const dx=target.x-s.x,dy=target.y-s.y;
         const l=Math.hypot(dx,dy)||1;
+        s.angle=Math.atan2(dy,dx); // faces (and stretches toward) wherever it's currently homing
         if(l<=target.radius+r*.6){
           api.damage(target,e.damage,self);
           s.life=0;
@@ -1143,7 +1156,7 @@
           ctx.fill();
         });
         ctx.globalAlpha=1;
-        drawBall(ctx,s.x,s.y,r,e.spin*4);
+        drawBall(ctx,s.x,s.y,r,s.angle,1.4);
       }
 
       if(self.hp<=0)return;
