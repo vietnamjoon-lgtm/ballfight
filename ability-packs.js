@@ -1333,8 +1333,9 @@
   'use strict';
   const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
   const breadBank=(api,self)=>api.shared('berserk-bread-'+self.slot,()=>({pieces:[],nextDrop:null,processedAt:-1,renderer:null}));
-  const drawBread=(ctx,x,y,scale)=>{
-    ctx.save(); ctx.translate(x,y); ctx.rotate(-.25); ctx.scale(scale,scale);
+  const breadImage=typeof Image!=='undefined'&&g.ArenaMedia?new Image():null;
+  if(breadImage) breadImage.src=g.ArenaMedia.bread;
+  const drawBreadShape=ctx=>{
     ctx.lineWidth=2.5; ctx.strokeStyle='#1a1a1a'; ctx.fillStyle='#e08a2e';
     ctx.beginPath();
     ctx.moveTo(-17,4);
@@ -1347,6 +1348,14 @@
     ctx.beginPath(); ctx.moveTo(-9,-5); ctx.quadraticCurveTo(-7,1,-10,6); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(1,-8); ctx.quadraticCurveTo(3,-1,0,6); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(10,-8); ctx.quadraticCurveTo(12,-2,9,4); ctx.stroke();
+  };
+  const drawBread=(ctx,x,y,scale,rotation=-.25)=>{
+    ctx.save(); ctx.translate(x,y); ctx.rotate(rotation); ctx.scale(scale,scale);
+    if(breadImage&&breadImage.complete&&breadImage.naturalWidth){
+      const s=34; ctx.drawImage(breadImage,-s/2,-s/2,s,s);
+    }else{
+      drawBreadShape(ctx);
+    }
     ctx.restore();
   };
 
@@ -1445,8 +1454,11 @@
       }
       if(e.eating){
         const scale=1-e.eating.bites*.3;
+        const t=.5-e.eating.timer;
+        const wobble=Math.sin(t*50)*.5-.25;
+        const jx=Math.sin(t*70)*3, jy=Math.cos(t*65)*3;
         ctx.globalAlpha=Math.max(.15,scale);
-        drawBread(ctx,self.x,self.y-self.radius-22,Math.max(.3,scale));
+        drawBread(ctx,self.x+jx,self.y-self.radius-22+jy,Math.max(.3,scale),wobble);
         ctx.globalAlpha=1;
       }
       if(!e.transformed) return;
