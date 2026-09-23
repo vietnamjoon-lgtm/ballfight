@@ -133,6 +133,7 @@
     ctx.lineWidth = 5; ctx.strokeStyle = '#111'; ctx.strokeRect(PAD - 2, PAD - 2, SIZE - PAD * 2 + 4, SIZE - PAD * 2 + 4);
     for (const ring of battle.rings) { ctx.globalAlpha = ring.life / .45; ctx.strokeStyle = ring.color; ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.from + (ring.range - ring.from) * (1 - ring.life / .45), 0, Math.PI * 2); ctx.stroke(); }
     ctx.globalAlpha = 1;
+        globalThis.ArenaDrawGas?.(ctx, battle);
     for (const f of battle.fighters) {
       if (f.dash) { f.trail.forEach((p, i) => { ctx.globalAlpha = i / f.trail.length * .2; circle(p.x, p.y, f.radius * i / f.trail.length, f.color); }); } ctx.globalAlpha = 1;
       circle(f.x, f.y, f.radius, f.flash > 0 && effectsEnabled ? '#ff7777' : f.color);
