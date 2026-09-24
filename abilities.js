@@ -48,4 +48,37 @@
       cast(api, self, target, p) { api.orbit(self, p); }
     }
   };
+
+  // Portrait state for transform abilities. An ability may expose photoFx(self, skill) -> { mix, blur, dx, dy }
+  // (mix 0 = original photo, 1 = awakened photo); one with only photo() swaps instantly.
+  const NO_FX = { mix: 0, blur: 0, dx: 0, dy: 0 };
+  global.ArenaPortraitFx = (f, types) => {
+    let best = NO_FX;
+    for (const skill of f.skills) {
+      const type = types[skill.type];
+      const fx = type.photoFx ? type.photoFx(f, skill) : type.photo?.(f, skill) === 'secondary' ? { ...NO_FX, mix: 1 } : null;
+      if (fx && (fx.mix > best.mix || Math.hypot(fx.dx, fx.dy) > Math.hypot(best.dx, best.dy))) best = fx;
+    }
+    return best;
+  };
+  // Draws the round portrait at (f.x, f.y), cross-fading the awakened photo over the original with a blur
+  // that peaks mid-transition. Returns false when there is nothing to draw (caller falls back to eyes).
+  global.ArenaDrawPortrait = (ctx, f, fx, img, img2, r, motion = true) => {
+    const ready = i => i?.complete && i.naturalWidth ? i : null;
+    const base = ready(img), top = ready(img2), mix = top ? fx.mix : 0;
+    if (!base && !(top && mix > 0)) return false;
+    const blur = motion && mix > 0 && mix < 1 ? fx.blur : 0, pad = blur * 1.5;
+    const paint = (i, alpha) => {
+      if (!i || alpha <= .001) return;
+      const side = Math.min(i.naturalWidth, i.naturalHeight);
+      ctx.globalAlpha = alpha; if (blur > .1) ctx.filter = `blur(${blur.toFixed(1)}px)`;
+      ctx.drawImage(i, (i.naturalWidth - side) / 2, (i.naturalHeight - side) / 2, side, side, -r - pad, -r - pad, (r + pad) * 2, (r + pad) * 2);
+      ctx.filter = 'none';
+    };
+    ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.facing); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+    if (mix < 1) paint(base, 1);
+    paint(top, mix);
+    ctx.restore(); ctx.globalAlpha = 1;
+    return true;
+  };
 })(globalThis);

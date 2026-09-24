@@ -143,12 +143,10 @@
       if (f.dash) { f.trail.forEach((p, i) => { ctx.globalAlpha = i / f.trail.length * .2; circle(p.x, p.y, f.radius * i / f.trail.length, f.color); }); } ctx.globalAlpha = 1;
       ctx.save();
 ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
+      const fx = ArenaPortraitFx(f, types);
+      if (effectsEnabled) ctx.translate(fx.dx, fx.dy);
       circle(f.x, f.y, f.radius, f.flash > 0 && effectsEnabled ? '#ff7777' : f.color);
-      const awakened = f.skills.some(skill => types[skill.type].photo?.(f, skill) === 'secondary');
-      const img = (awakened && images2.get(f.id)) || images.get(f.id);
-      if (img?.complete && img.naturalWidth) {
-        ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.facing); ctx.beginPath(); ctx.arc(0, 0, f.radius - 2, 0, Math.PI * 2); ctx.clip();
-        const side = Math.min(img.naturalWidth, img.naturalHeight); ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, -f.radius, -f.radius, f.radius * 2, f.radius * 2); ctx.restore();
+      if (ArenaDrawPortrait(ctx, f, fx, images.get(f.id), images2.get(f.id), f.radius - 2, effectsEnabled)) {
         if (f.flash > 0 && effectsEnabled) { ctx.globalAlpha = .6 * f.flash / .22; circle(f.x, f.y, f.radius, '#ff2222'); ctx.globalAlpha = 1; }
       } else {
         const other = battle.fighters[1 - f.slot], angle = (countdown ? countdown.angle(f.slot) : Math.atan2(other.y - f.y, other.x - f.x)) + f.facing;

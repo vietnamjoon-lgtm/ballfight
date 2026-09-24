@@ -84,6 +84,31 @@ const CINE_FRAMES = Math.ceil(4.5 * 120) + 2;
   assert.equal(types.berserk.photo(self, skill()), 'secondary', '각성 상태 내내 각성 사진 유지');
 }
 
+// photoFx: the body shakes first with the original photo, then the awakened photo blurs in while it
+// shakes, settles fully by the end of the cine, and blurs back out at the very end of the berserk window.
+{
+  const { b, self, target } = setup();
+  target.hp = target.maxHp = 1e6; // keep the battle running through the whole window
+  const fx = () => types.berserk.photoFx(self, skill());
+  assert.equal(fx().mix, 0, '평시엔 원래 사진');
+  assert.equal(ctx.ArenaPortraitFx(self, types).mix, 0);
+  advance(b, Math.ceil(preset.params.transformTime * 120) + 1);
+  advance(b, 120); // ~1s into the cine
+  assert.ok(fx().mix < .05, '처음엔 흔들리기만 하고 사진은 그대로');
+  assert.ok(Math.hypot(fx().dx, fx().dy) > 0 || fx().blur > 0, '변신 중 몸이 흔들림');
+  advance(b, 120); // ~2s: mid-blend
+  const mid = fx();
+  assert.ok(mid.mix > .2 && mid.mix < .9, '중간엔 사진이 섞이는 중');
+  assert.ok(mid.blur > 4, '섞이는 동안 블러');
+  advance(b, Math.ceil(2.6 * 120)); // past the cine
+  assert.equal(b.effects[0].mode, 'berserk');
+  assert.equal(fx().mix, 1, '각성 중엔 각성 사진 그대로');
+  assert.equal(fx().blur, 0);
+  advance(b, Math.ceil((preset.params.awakenDuration - 4.6 - .3) * 120));
+  assert.equal(b.effects[0].mode, 'berserk');
+  assert.ok(fx().mix < 1 && fx().mix > 0, '끝날 때 서서히 원래 사진으로');
+}
+
 // After the cinematic window, it switches to berserk mode, unroots, and starts charging.
 {
   const { b, self, target } = setup();
