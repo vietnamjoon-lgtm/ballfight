@@ -36,7 +36,6 @@
   if (!data.abilities.some(a => a.id === ArenaMissilePreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaMissilePreset));
   if (!data.abilities.some(a => a.id === ArenaFartPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaFartPreset));
   if (!data.abilities.some(a => a.id === ArenaOrbPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaOrbPreset));
-  if (!data.abilities.some(a => a.id === ArenaAskFightPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaAskFightPreset));
   if (!data.abilities.some(a => a.id === ArenaBerserkPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaBerserkPreset));
   if (!data.abilities.some(a => a.id === ArenaSpikeGuardPreset.id) && data.abilities.length < 200) data.abilities.push(copy(ArenaSpikeGuardPreset));
   data = validate(data, types);

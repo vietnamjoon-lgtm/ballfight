@@ -3,8 +3,13 @@
   const SIZE = 720, PAD = 6, IDLE_SPIN = 1.4;
   const copy = value => JSON.parse(JSON.stringify(value));
   const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+  const RETIRED_TYPES = ['askFight'];
   function validate(input, types) {
     if (!input || input.version !== 1 || !Array.isArray(input.characters) || !Array.isArray(input.abilities)) throw Error('버전 1의 캐릭터 설정 파일이 필요합니다.');
+    // Abilities that were removed from the game: drop them (and unequip them) instead of rejecting the roster.
+    const retired = new Set(input.abilities.filter(a => a && RETIRED_TYPES.includes(a.type)).map(a => a.id));
+    if (retired.size) input = { ...input, abilities: input.abilities.filter(a => !(a && RETIRED_TYPES.includes(a.type))),
+      characters: input.characters.map(c => c && Array.isArray(c.abilities) ? { ...c, abilities: c.abilities.filter(id => !retired.has(id)) } : c) };
     if (input.characters.length < 1 || input.characters.length > 100 || input.abilities.length > 200) throw Error('캐릭터는 1~100개, 능력은 최대 200개까지 가능합니다.');
     const text = (value, label, max = 40) => { if (typeof value !== 'string' || !value.trim() || value.length > max) throw Error(label + '을 확인하세요.'); return value.trim(); };
     const number = (value, min, max, label) => { if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) throw Error(`${label}: ${min}~${max} 사이의 숫자가 필요합니다.`); return value; };

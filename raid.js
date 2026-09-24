@@ -468,7 +468,6 @@ function mount(){
     add(data.abilities,g.ArenaMissilePreset);
     add(data.abilities,g.ArenaFartPreset);
     add(data.abilities,g.ArenaOrbPreset);
-    add(data.abilities,g.ArenaAskFightPreset);
     add(data.abilities,g.ArenaBerserkPreset);
     add(data.abilities,g.ArenaSpikeGuardPreset);
 
