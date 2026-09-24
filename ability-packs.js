@@ -8,9 +8,8 @@
   // Ultimate "nose grinder": the nose stretches out, then whirls around its owner for SPIN_TIME seconds.
   const NOSE_CHARGE_GRAZE = .12, NOSE_CHARGE_CENTER = .17;
   const SPIN_GROW = .3, SPIN_TIME = 2, SPIN_SHRINK = .3, SPIN_TURN = 22, SPIN_HIT_GAP = .25;
-  // Hit feel for the spin: a short freeze on impact, then sparks, nose-skin chunks, a shock ring and a comic word.
+  // Hit feel for the spin: a short freeze on impact, then sparks, nose-skin chunks and a shock ring.
   const HIT_STOP = .07, POP_LIFE = .4, SPARK_COLORS = ['#ffd000', '#ffb300', '#ff6a00', '#ff2d2d'], SKIN_COLORS = ['#f6c4b2', '#df9589', '#c46e6e'];
-  const HIT_WORDS = ['퍽!', '빡!', '팍!', '쾅!'];
   function drawSpinHits(ctx, e) {
     ctx.lineCap = 'round';
     for (const s of e.sparks) {
@@ -21,7 +20,7 @@
     }
     for (const p of e.pops) {
       const age = 1 - p.life / POP_LIFE;
-      // Shock ring + starburst flash for the first instant, then the word pops and fades.
+      // Shock ring + starburst flash for the first instant.
       ctx.globalAlpha = 1 - age; ctx.strokeStyle = '#ff6a00'; ctx.lineWidth = 5 * (1 - age);
       ctx.beginPath(); ctx.arc(p.x, p.y, 16 + age * 90, 0, Math.PI * 2); ctx.stroke();
       if (age < .35) {
@@ -31,13 +30,6 @@
         for (let i = 0; i < spikes * 2; i++) { const a = i * Math.PI / spikes + p.tilt, rad = (i % 2 ? 16 : 46) * (.6 + age * 1.6); ctx.lineTo(p.x + Math.cos(a) * rad, p.y + Math.sin(a) * rad); }
         ctx.closePath(); ctx.fill(); ctx.stroke();
       }
-      const scale = age < .15 ? 1.7 - age / .15 * .7 : 1;
-      ctx.save(); ctx.translate(p.x, p.y - 34 - age * 28); ctx.rotate(p.tilt); ctx.scale(scale, scale);
-      ctx.globalAlpha = age < .6 ? 1 : 1 - (age - .6) / .4;
-      ctx.font = '900 40px Arial, "Malgun Gothic", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineJoin = 'round'; ctx.lineWidth = 7; ctx.strokeStyle = '#222'; ctx.strokeText(p.word, 0, 0);
-      ctx.fillStyle = '#ffde2e'; ctx.fillText(p.word, 0, 0);
-      ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
@@ -136,7 +128,7 @@
           const a = r() * Math.PI * 2, speed = 90 + r() * 170, life = .35 + r() * .2;
           e.sparks.push({ x: hx, y: hy, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life, max: life, drag: 4, kind: 'chunk', size: 3 + r() * 4, color: SKIN_COLORS[i % SKIN_COLORS.length] });
         }
-        e.pops.push({ x: hx, y: hy, life: POP_LIFE, word: HIT_WORDS[Math.floor(r() * HIT_WORDS.length)], tilt: (r() - .5) * .6 });
+        e.pops.push({ x: hx, y: hy, life: POP_LIFE, tilt: (r() - .5) * .6 });
         e.hitTimer = SPIN_HIT_GAP; e.stop = HIT_STOP; e.dir = -e.dir; api.damage(target, e.damage, self); api.sound('spinHit'); api.shake(.4);
       }
     },
