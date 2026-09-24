@@ -137,7 +137,7 @@
           e.sparks.push({ x: hx, y: hy, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life, max: life, drag: 4, kind: 'chunk', size: 3 + r() * 4, color: SKIN_COLORS[i % SKIN_COLORS.length] });
         }
         e.pops.push({ x: hx, y: hy, life: POP_LIFE, word: HIT_WORDS[Math.floor(r() * HIT_WORDS.length)], tilt: (r() - .5) * .6 });
-        e.hitTimer = SPIN_HIT_GAP; e.stop = HIT_STOP; e.dir = -e.dir; api.damage(target, e.damage, self); api.sound('noseHit'); api.shake(.4);
+        e.hitTimer = SPIN_HIT_GAP; e.stop = HIT_STOP; e.dir = -e.dir; api.damage(target, e.damage, self); api.sound('spinHit'); api.shake(.4);
       }
     },
     draw(ctx, e, self) {
