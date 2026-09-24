@@ -1334,6 +1334,28 @@
   'use strict';
   const field=(label,min,max,step,value)=>({label,min,max,step,default:value});
   const CENTER=360, MOVE_DUR=1.6, CINE_DUR=4.5;
+  /* Portrait transform timing (seconds of awakenAge): the body shakes harder and harder until SHAKE_PEAK, then
+     the awakened photo blurs in between BLEND_FROM and BLEND_TO while the shaking holds, and the shaking dies
+     down by the end of the cine. At the end of the berserk window the photo blurs back over REVERT_DUR. */
+  const SHAKE_PEAK=1.3, BLEND_FROM=1.1, BLEND_TO=3.3, REVERT_DUR=.6, JITTER_MAX=9, BLUR_MAX=9;
+  const smooth=u=>{u=Math.min(1,Math.max(0,u)); return u*u*(3-2*u);};
+  const portraitFx=(mode,age,duration)=>{
+    let mix=0, jitter=0;
+    if(mode==='cine'){
+      mix=smooth((age-BLEND_FROM)/(BLEND_TO-BLEND_FROM));
+      jitter=age<SHAKE_PEAK?Math.pow(age/SHAKE_PEAK,2):age<BLEND_TO?1:Math.max(0,1-(age-BLEND_TO)/(CINE_DUR-BLEND_TO));
+    }else if(mode==='berserk'){
+      mix=smooth((duration-age)/REVERT_DUR);
+      jitter=(1-mix)*.5;
+    }
+    jitter*=JITTER_MAX;
+    return {
+      mix, jitter,
+      blur:(mix>0&&mix<1?Math.sin(mix*Math.PI)*BLUR_MAX:0)+jitter*.25,
+      dx:(Math.sin(age*97)+Math.sin(age*61.3)*.6)/1.6*jitter,
+      dy:(Math.cos(age*89)+Math.sin(age*53.7)*.6)/1.6*jitter
+    };
+  };
   const breadBank=(api,self)=>api.shared('berserk-bread-'+self.slot,()=>({pieces:[],nextDrop:null,processedAt:-1,renderer:null}));
   const breadImage=typeof Image!=='undefined'&&g.ArenaMedia?new Image():null;
   if(breadImage) breadImage.src=g.ArenaMedia.bread;
@@ -1426,6 +1448,10 @@
       const s=self.skillState[skill.id];
       return s&&s.mode!=='survive'?'secondary':'primary';
     },
+    photoFx(self,skill){
+      const s=self.skillState[skill.id];
+      return portraitFx(s?.mode,s?.awakenAge||0,skill.params.awakenDuration);
+    },
     cast(api,self,target,p,skill){
       self.skillState[skill.id]={elapsed:0,mode:'survive'};
       api.effect('berserk',self,{...p,skillId:skill.id,mode:'survive',elapsed:0,awakenAge:0,eating:null,particles:[],phase:'charge',phaseTimer:0},1e9);
@@ -1482,13 +1508,13 @@
           bank.pieces=[]; e.eating=null;
           api.sound('awaken');
         }
-        self.skillState[e.skillId]={elapsed:e.elapsed,mode:e.mode};
+        self.skillState[e.skillId]={elapsed:e.elapsed,mode:e.mode,awakenAge:e.awakenAge};
         return;
       }
 
       e.awakenAge+=dt;
       if(e.mode==='cine'){
-        api.shake(.1);
+        api.shake(.06+.14*portraitFx('cine',e.awakenAge,e.awakenDuration).jitter/JITTER_MAX);
         const t=Math.min(1,e.awakenAge/MOVE_DUR);
         const ease=1-Math.pow(1-t,2);
         self.x=e.startX+(CENTER-e.startX)*ease;
@@ -1532,7 +1558,7 @@
       }
       for(const p of e.particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.life-=dt; p.rot+=p.spin*dt; }
       e.particles=e.particles.filter(p=>p.life>0);
-      self.skillState[e.skillId]={elapsed:e.elapsed,mode:e.mode};
+      self.skillState[e.skillId]={elapsed:e.elapsed,mode:e.mode,awakenAge:e.awakenAge};
     },
     draw(ctx,e,self){
       if(e.mode==='survive'){

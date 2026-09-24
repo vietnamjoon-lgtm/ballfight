@@ -653,33 +653,12 @@ function mount(){
         globalThis.Arena67BodyOffset?.(f,battle)||0
       );
 
+      const fx=g.ArenaPortraitFx(f,g.ArenaAbilities);
+      if(!reduced) ctx.translate(fx.dx,fx.dy);
+
       circle(f.x,f.y,f.radius,f.color);
 
-      const awakened=f.skills.some(s=>g.ArenaAbilities[s.type].photo?.(f,s)==='secondary');
-      const img=(awakened&&images2.get(f.id))||images.get(f.id);
-      if(img?.complete&&img.naturalWidth){
-        const side=Math.min(
-          img.naturalWidth,img.naturalHeight
-        );
-
-        ctx.save();
-        ctx.translate(f.x,f.y);
-        ctx.rotate(f.facing);
-        ctx.beginPath();
-        ctx.arc(0,0,f.radius,0,Math.PI*2);
-        ctx.clip();
-
-        ctx.drawImage(
-          img,
-          (img.naturalWidth-side)/2,
-          (img.naturalHeight-side)/2,
-          side,side,
-          -f.radius,-f.radius,
-          2*f.radius,2*f.radius
-        );
-
-        ctx.restore();
-      }
+      g.ArenaDrawPortrait(ctx,f,fx,images.get(f.id),images2.get(f.id),f.radius,!reduced);
 
       if(!reduced&&f.flash>0){
         ctx.globalAlpha=f.flash*2;
