@@ -65,4 +65,13 @@ test('공격 없는 회복 캐릭터도 제한 시간에 판정', () => {
   const c = copy(defaults); c.characters = [{ ...c.characters[0], id: 'peace', hp: 1000, contactDamage: 0, abilities: ['recover'] }]; c.abilities.find(a => a.id === 'recover').params.amount = 100; c.abilities.find(a => a.id === 'recover').cooldown = .3;
   const b = make('peace', 'peace', c); b.start(); tick(b, 121); assert.equal(b.state, 'ended'); assert.ok(b.time <= 120.01);
 });
+test('삭제된 능력(물어보고 공격)이 저장돼 있어도 나머지 설정은 그대로 불러옴', () => {
+  const c = copy(defaults); c.abilities.push({ id: 'pack_ask_fight_v1', name: '물어보고 공격', type: 'askFight', cooldown: 6, params: { damage: 22 } });
+  c.characters[0].abilities = [...c.characters[0].abilities.slice(0, 2), 'pack_ask_fight_v1'];
+  const kept = c.characters[0].abilities.filter(id => id !== 'pack_ask_fight_v1');
+  const out = validate(c, types);
+  assert.ok(!out.abilities.some(a => a.type === 'askFight'), '능력 목록에서 빠짐');
+  assert.deepEqual([...out.characters[0].abilities], kept, '장착 목록에서만 빠지고 나머지는 유지');
+  assert.equal(out.characters.length, c.characters.length);
+});
 console.log(`${tests.length}개 검사 통과\n` + tests.map(name => '✓ ' + name).join('\n'));
