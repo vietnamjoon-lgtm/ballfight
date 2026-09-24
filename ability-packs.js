@@ -5,8 +5,8 @@
   // User-supplied nose photo (assets/nose.png), embedded as base64 in media.js for offline file:// use.
   const noseImage = typeof Image !== 'undefined' && global.ArenaMedia ? new Image() : null;
   if (noseImage) noseImage.src = global.ArenaMedia.nose;
-  // Ultimate "club grinder": the nose swells into a club, then whirls around its owner for CLUB_SPIN seconds.
-  const CLUB_GROW = .3, CLUB_SPIN = 2, CLUB_SHRINK = .3, CLUB_TURN = 22, CLUB_THICK = 2.6, CLUB_HIT_GAP = .25;
+  // Ultimate "nose grinder": the nose stretches out, then whirls around its owner for SPIN_TIME seconds.
+  const SPIN_GROW = .3, SPIN_TIME = 2, SPIN_SHRINK = .3, SPIN_TURN = 22, SPIN_HIT_GAP = .25;
   // Draws the nose along local +x from 0 to length: the photo when decoded, else a vector nose.
   function drawNoseShape(ctx, length, width) {
     if (noseImage?.complete && noseImage.naturalWidth) {
@@ -31,19 +31,19 @@
   }
   global.ArenaAbilities.nose = {
     label: '늘어나는 코',
-    description: '발동 순간 상대 방향으로 코를 뻗었다가 회수합니다. 실제 코에 닿아야 적중하며 한 번 뻗을 때 한 번만 피해를 줍니다. 궁극기: 코가 몽둥이처럼 커져 2초 동안 분쇄기처럼 돌며 휘두릅니다.',
+    description: '발동 순간 상대 방향으로 코를 뻗었다가 회수합니다. 실제 코에 닿아야 적중하며 한 번 뻗을 때 한 번만 피해를 줍니다. 궁극기: 코를 쭉 뻗은 채 2초 동안 분쇄기처럼 돌며 휘두릅니다.',
     fields: {
       damage: field('피해', 1, 100, 1, 24), range: field('최대 길이', 80, 600, 10, 380),
       width: field('코 두께', 8, 60, 1, 24), extend: field('늘어나는 시간 (초)', .1, 1, .05, .25),
       hold: field('유지 시간 (초)', 0, 1, .05, .15), retract: field('돌아오는 시간 (초)', .1, 1, .05, .3),
-      ultDamage: field('궁극기 타격 피해', 1, 100, 1, 9), ultRange: field('궁극기 몽둥이 길이', 80, 400, 10, 190)
+      ultDamage: field('궁극기 타격 피해', 1, 100, 1, 9), ultRange: field('궁극기 코 길이', 80, 400, 10, 190)
     },
     ultimate: {
-      name: '몽둥이 분쇄기',
-      duration: CLUB_GROW + CLUB_SPIN + CLUB_SHRINK,
+      name: '코 분쇄기',
+      duration: SPIN_GROW + SPIN_TIME + SPIN_SHRINK,
       cast(api, self, target, p) {
-        api.effect('nose', self, { mode: 'club', damage: p.ultDamage, range: p.ultRange, width: p.width * CLUB_THICK,
-          angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, thick: 0, turn: 0, hitTimer: 0 }, CLUB_GROW + CLUB_SPIN + CLUB_SHRINK);
+        api.effect('nose', self, { mode: 'spin', damage: p.ultDamage, range: p.ultRange, width: p.width,
+          angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, turn: 0, hitTimer: 0 }, SPIN_GROW + SPIN_TIME + SPIN_SHRINK);
         api.shake(.35);
       }
     },
@@ -51,7 +51,7 @@
       api.effect('nose', self, { ...p, angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, hit: false }, p.extend + p.hold + p.retract);
     },
     update(e, api, self, target, dt) {
-      if (e.mode === 'club') return this.updateClub(e, api, self, target, dt);
+      if (e.mode === 'spin') return this.updateSpin(e, api, self, target, dt);
       e.age += dt;
       const ratio = e.age < e.extend ? 1 - Math.pow(1 - e.age / e.extend, 2) : e.age < e.extend + e.hold ? 1 : Math.max(0, 1 - (e.age - e.extend - e.hold) / e.retract);
       const dx = Math.cos(e.angle), dy = Math.sin(e.angle);
@@ -67,43 +67,43 @@
         e.hit = true; api.damage(target, e.damage, self); api.pushAway(target, self); api.sound('noseHit');
       }
     },
-    updateClub(e, api, self, target, dt) {
+    updateSpin(e, api, self, target, dt) {
       e.age += dt; e.hitTimer -= dt;
-      const spinEnd = CLUB_GROW + CLUB_SPIN;
-      const ratio = e.age < CLUB_GROW ? 1 - Math.pow(1 - e.age / CLUB_GROW, 2) : e.age < spinEnd ? 1 : Math.max(0, 1 - (e.age - spinEnd) / CLUB_SHRINK);
-      // Spin up while the club grows, full speed for the spin, wind down as it shrinks.
-      e.turn = CLUB_TURN * ratio; e.angle += e.turn * dt;
+      const spinEnd = SPIN_GROW + SPIN_TIME;
+      const ratio = e.age < SPIN_GROW ? 1 - Math.pow(1 - e.age / SPIN_GROW, 2) : e.age < spinEnd ? 1 : Math.max(0, 1 - (e.age - spinEnd) / SPIN_SHRINK);
+      // Spin up while the nose stretches, full speed for the spin, wind down as it shrinks.
+      e.turn = SPIN_TURN * ratio; e.angle += e.turn * dt;
       self.spin = 6;
       const dx = Math.cos(e.angle), dy = Math.sin(e.angle);
       e.x = self.x + dx * self.radius * .55; e.y = self.y + dy * self.radius * .55;
-      e.length = e.range * ratio; e.thick = e.width * (.35 + .65 * ratio);
+      e.length = e.range * ratio;
       const projection = Math.max(0, Math.min(e.length, (target.x - e.x) * dx + (target.y - e.y) * dy));
       const distance = Math.hypot(target.x - (e.x + dx * projection), target.y - (e.y + dy * projection));
-      if (e.hitTimer <= 0 && e.age <= spinEnd && ratio > .5 && distance <= target.radius + e.thick / 2) {
-        e.hitTimer = CLUB_HIT_GAP; api.damage(target, e.damage, self); api.pushAway(target, self); api.sound('noseHit'); api.shake(.2);
+      if (e.hitTimer <= 0 && e.age <= spinEnd && ratio > .5 && distance <= target.radius + e.width / 2) {
+        e.hitTimer = SPIN_HIT_GAP; api.damage(target, e.damage, self); api.pushAway(target, self); api.sound('noseHit'); api.shake(.2);
       }
     },
     draw(ctx, e, self) {
       if (!e.length) return;
-      if (e.mode === 'club') {
-        const reach = self.radius * .55 + e.length, blur = Math.min(1, e.turn / CLUB_TURN);
-        // Grinder blur: a faint swept disc plus a motion arc trailing the club's head.
+      if (e.mode === 'spin') {
+        const reach = self.radius * .55 + e.length, blur = Math.min(1, e.turn / SPIN_TURN);
+        // Grinder blur: a faint swept disc plus a motion arc trailing the nose tip.
         ctx.save(); ctx.translate(self.x, self.y);
         ctx.globalAlpha = .1 * blur; ctx.fillStyle = self.color;
         ctx.beginPath(); ctx.arc(0, 0, reach, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = .45 * blur; ctx.strokeStyle = self.color; ctx.lineWidth = e.thick * .7; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.arc(0, 0, reach - e.thick * .35, e.angle - 1.4 * blur, e.angle); ctx.stroke();
+        ctx.globalAlpha = .45 * blur; ctx.strokeStyle = self.color; ctx.lineWidth = e.width * .7; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, 0, reach - e.width * .35, e.angle - 1.4 * blur, e.angle); ctx.stroke();
         ctx.restore();
-        // Afterimages of the club just behind its current angle.
+        // Afterimages of the nose just behind its current angle.
         for (const k of [3, 2, 1]) {
           const back = e.angle - k * .22 * blur;
           ctx.save(); ctx.globalAlpha = .12 * (4 - k) * blur;
           ctx.translate(self.x + Math.cos(back) * self.radius * .55, self.y + Math.sin(back) * self.radius * .55); ctx.rotate(back);
-          drawNoseShape(ctx, e.length, e.thick); ctx.restore();
+          drawNoseShape(ctx, e.length, e.width); ctx.restore();
         }
       }
       ctx.translate(e.x, e.y); ctx.rotate(e.angle);
-      drawNoseShape(ctx, e.length, e.mode === 'club' ? e.thick : e.width);
+      drawNoseShape(ctx, e.length, e.width);
     }
   };
   global.ArenaNosePreset = {

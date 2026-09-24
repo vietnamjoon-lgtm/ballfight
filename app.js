@@ -236,7 +236,7 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
       lastImpact = battle.impactId;
     }
     wallSound.setFlight(battle.state === 'running' && battle.effects.some(e => e.type === 'moneyMissile' && e.missiles.length > 0));
-    wallSound.setGrinder(battle.state === 'running' && battle.effects.some(e => e.mode === 'club'));
+    wallSound.setGrinder(battle.state === 'running' && battle.effects.some(e => e.mode === 'spin'));
     draw(); requestAnimationFrame(frame);
   }
   function pause() { if (countdown) { countdown.paused = !countdown.paused; $('pause').textContent = countdown.paused ? '계속하기' : '일시정지'; updateUI(); return; } if (battle.state === 'running') { battle.pause(); wallSound.stopSamples(); $('pause').textContent = '계속하기'; } else if (battle.state === 'paused') { wallSound.unlock(); battle.start(); $('pause').textContent = '일시정지'; } updateUI(); }

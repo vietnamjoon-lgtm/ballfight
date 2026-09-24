@@ -24,14 +24,15 @@ const step = b => b.step(1/120);
   while (!b.events.some(e => e.text.includes('궁극기'))) { step(b); assert.ok(b.time < cd * (casts + 2), '궁극기가 발동해야 함'); }
   assert.equal(self.ult, 0, '발동하면 게이지 초기화');
   assert.ok(self.ultTime > 0);
-  const club = b.effects.find(e => e.owner === 0 && e.mode === 'club'); assert.ok(club, '몽둥이 효과 생성');
+  const spin = b.effects.find(e => e.owner === 0 && e.mode === 'spin'); assert.ok(spin, '코 회전 효과 생성');
+  assert.equal(spin.width, self.skills[0].params.width, '코는 원래 두께 그대로');
   assert.equal(b.effects.filter(e => e.owner === 0 && e.type === 'nose').length, 1, '일반 코와 겹치지 않음');
   // No regular casts and no gauge gain while the ultimate runs.
   const remaining = self.skills[0].remaining, start = b.time;
   while (self.ultTime > 0) { step(b); if (self.ultTime > 0) { assert.equal(self.skills[0].remaining, remaining); assert.equal(self.ult, 0); } }
   const duration = b.time - start;
-  assert.ok(duration > 2 && duration < 3, '몽둥이 분쇄기는 약 2초 회전');
-  assert.equal(b.effects.filter(e => e.mode === 'club').length, 0, '끝나면 사라짐');
+  assert.ok(duration > 2 && duration < 3, '코 분쇄기는 약 2초 회전');
+  assert.equal(b.effects.filter(e => e.mode === 'spin').length, 0, '끝나면 사라짐');
 }
 {
   // A target standing inside the spin radius is hit repeatedly, spaced by the hit gap.
