@@ -6,6 +6,7 @@
   const noseImage = typeof Image !== 'undefined' && global.ArenaMedia ? new Image() : null;
   if (noseImage) noseImage.src = global.ArenaMedia.nose;
   // Ultimate "nose grinder": the nose stretches out, then whirls around its owner for SPIN_TIME seconds.
+  const NOSE_CHARGE_GRAZE = .12, NOSE_CHARGE_CENTER = .17;
   const SPIN_GROW = .3, SPIN_TIME = 2, SPIN_SHRINK = .3, SPIN_TURN = 22, SPIN_HIT_GAP = .25;
   // Draws the nose along local +x from 0 to length: the photo when decoded, else a vector nose.
   function drawNoseShape(ctx, length, width) {
@@ -65,6 +66,10 @@
       const distance = Math.hypot(target.x - (e.x + dx * projection), target.y - (e.y + dy * projection));
       if (!e.hit && e.age <= e.extend + e.hold && e.length > 0 && distance <= target.radius + e.width / 2) {
         e.hit = true; api.damage(target, e.damage, self); api.pushAway(target, self); api.sound('noseHit');
+        // Ultimate charge: a graze gives 12%, a dead-centre poke 17%, scaled by how far the target's centre sits off the nose's line.
+        const offset = Math.abs((target.x - e.x) * dy - (target.y - e.y) * dx);
+        const precision = Math.max(0, 1 - offset / (target.radius + e.width / 2));
+        api.chargeUltimate?.(self, NOSE_CHARGE_GRAZE + (NOSE_CHARGE_CENTER - NOSE_CHARGE_GRAZE) * precision);
       }
     },
     updateSpin(e, api, self, target, dt) {
