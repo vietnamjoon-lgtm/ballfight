@@ -1,8 +1,8 @@
-// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw, bread-eating, berserk awaken/slam and nose-grinder sounds. No background music.
+// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw, bread-eating, berserk awaken/slam, nose-grinder and nose-grinder hit sounds. No background music.
 (function (global) {
   'use strict';
   class ArenaWallSound {
-    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.grinder = null; this.samples = { missile: null, punch: null, sword: null, tick: null, six: null, seven: null, breadEat: null, awaken: null, berserkSlam: null, grinder: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
+    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.grinder = null; this.samples = { missile: null, punch: null, sword: null, tick: null, six: null, seven: null, breadEat: null, awaken: null, berserkSlam: null, grinder: null, spinHit: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
     loadMedia() {
       if (this.loading || !global.ArenaMedia || !this.context) return;
       const decode = key => {
@@ -11,8 +11,8 @@
         const bytes = Uint8Array.from(atob(media.split(',')[1]), c => c.charCodeAt(0));
         return this.context.decodeAudioData(bytes.buffer).catch(() => null);
       };
-      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick'), decode('six'), decode('seven'), decode('breadEat'), decode('awaken'), decode('berserkSlam'), decode('grinder')]).then(([missile, punch, sword, tick, six, seven, breadEat, awaken, berserkSlam, grinder]) => {
-        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick; this.samples.six = six; this.samples.seven = seven; this.samples.breadEat = breadEat; this.samples.awaken = awaken; this.samples.berserkSlam = berserkSlam; this.samples.grinder = grinder;
+      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick'), decode('six'), decode('seven'), decode('breadEat'), decode('awaken'), decode('berserkSlam'), decode('grinder'), decode('spinHit')]).then(([missile, punch, sword, tick, six, seven, breadEat, awaken, berserkSlam, grinder, spinHit]) => {
+        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick; this.samples.six = six; this.samples.seven = seven; this.samples.breadEat = breadEat; this.samples.awaken = awaken; this.samples.berserkSlam = berserkSlam; this.samples.grinder = grinder; this.samples.spinHit = spinHit;
       });
     }
     setRate(rate) {
@@ -132,6 +132,8 @@
         this.playOneShot('punch', .68);
       } else if (type === 'noseHit') {
         this.playOneShot('sword', .8);
+      } else if (type === 'spinHit') {
+        this.playOneShot('spinHit', .9);
       } else if (type === 'orbHit') {
         this.playOneShot('punch', .65);
       } else if (type === 'sixThrow') {

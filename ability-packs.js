@@ -8,6 +8,39 @@
   // Ultimate "nose grinder": the nose stretches out, then whirls around its owner for SPIN_TIME seconds.
   const NOSE_CHARGE_GRAZE = .12, NOSE_CHARGE_CENTER = .17;
   const SPIN_GROW = .3, SPIN_TIME = 2, SPIN_SHRINK = .3, SPIN_TURN = 22, SPIN_HIT_GAP = .25;
+  // Hit feel for the spin: a short freeze on impact, then sparks, nose-skin chunks, a shock ring and a comic word.
+  const HIT_STOP = .07, POP_LIFE = .4, SPARK_COLORS = ['#ffd000', '#ffb300', '#ff6a00', '#ff2d2d'], SKIN_COLORS = ['#f6c4b2', '#df9589', '#c46e6e'];
+  const HIT_WORDS = ['퍽!', '빡!', '팍!', '쾅!'];
+  function drawSpinHits(ctx, e) {
+    ctx.lineCap = 'round';
+    for (const s of e.sparks) {
+      const t = s.life / s.max; ctx.globalAlpha = Math.min(1, t * 1.6);
+      if (s.kind === 'chunk') { ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.size * (.5 + t * .5), 0, Math.PI * 2); ctx.fill(); continue; }
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2.5 + 4 * t;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * .05, s.y - s.vy * .05); ctx.stroke();
+    }
+    for (const p of e.pops) {
+      const age = 1 - p.life / POP_LIFE;
+      // Shock ring + starburst flash for the first instant, then the word pops and fades.
+      ctx.globalAlpha = 1 - age; ctx.strokeStyle = '#ff6a00'; ctx.lineWidth = 5 * (1 - age);
+      ctx.beginPath(); ctx.arc(p.x, p.y, 16 + age * 90, 0, Math.PI * 2); ctx.stroke();
+      if (age < .35) {
+        const k = 1 - age / .35, spikes = 8;
+        ctx.globalAlpha = k; ctx.fillStyle = '#fff6b0'; ctx.strokeStyle = '#ff9f1c'; ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = 0; i < spikes * 2; i++) { const a = i * Math.PI / spikes + p.tilt, rad = (i % 2 ? 16 : 46) * (.6 + age * 1.6); ctx.lineTo(p.x + Math.cos(a) * rad, p.y + Math.sin(a) * rad); }
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+      const scale = age < .15 ? 1.7 - age / .15 * .7 : 1;
+      ctx.save(); ctx.translate(p.x, p.y - 34 - age * 28); ctx.rotate(p.tilt); ctx.scale(scale, scale);
+      ctx.globalAlpha = age < .6 ? 1 : 1 - (age - .6) / .4;
+      ctx.font = '900 40px Arial, "Malgun Gothic", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round'; ctx.lineWidth = 7; ctx.strokeStyle = '#222'; ctx.strokeText(p.word, 0, 0);
+      ctx.fillStyle = '#ffde2e'; ctx.fillText(p.word, 0, 0);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
   // Draws the nose along local +x from 0 to length: the photo when decoded, else a vector nose.
   function drawNoseShape(ctx, length, width) {
     if (noseImage?.complete && noseImage.naturalWidth) {
@@ -44,7 +77,7 @@
       duration: SPIN_GROW + SPIN_TIME + SPIN_SHRINK,
       cast(api, self, target, p) {
         api.effect('nose', self, { mode: 'spin', damage: p.ultDamage, range: p.ultRange, width: p.width,
-          angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, turn: 0, dir: 1, hitTimer: 0 }, SPIN_GROW + SPIN_TIME + SPIN_SHRINK);
+          angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, turn: 0, dir: 1, hitTimer: 0, stop: 0, sparks: [], pops: [] }, SPIN_GROW + SPIN_TIME + SPIN_SHRINK);
         api.shake(.35);
       }
     },
@@ -78,7 +111,12 @@
       const ratio = e.age < SPIN_GROW ? 1 - Math.pow(1 - e.age / SPIN_GROW, 2) : e.age < spinEnd ? 1 : Math.max(0, 1 - (e.age - spinEnd) / SPIN_SHRINK);
       // Spin up while the nose stretches, full speed for the spin, wind down as it shrinks.
       // dir flips on every hit, so the nose whips back the other way like repeated slaps.
-      e.turn = SPIN_TURN * ratio; e.angle += e.dir * e.turn * dt;
+      e.turn = SPIN_TURN * ratio;
+      if (e.stop > 0) e.stop -= dt; else e.angle += e.dir * e.turn * dt;
+      for (const s of e.sparks) { s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= 1 - dt * s.drag; s.vy *= 1 - dt * s.drag; s.life -= dt; }
+      e.sparks = e.sparks.filter(s => s.life > 0);
+      for (const p of e.pops) p.life -= dt;
+      e.pops = e.pops.filter(p => p.life > 0);
       self.spin = 6 * e.dir;
       const dx = Math.cos(e.angle), dy = Math.sin(e.angle);
       e.x = self.x + dx * self.radius * .55; e.y = self.y + dy * self.radius * .55;
@@ -87,7 +125,19 @@
       const distance = Math.hypot(target.x - (e.x + dx * projection), target.y - (e.y + dy * projection));
       if (e.hitTimer <= 0 && e.age <= spinEnd && ratio > .5 && distance <= target.radius + e.width / 2) {
         // No knockback here: the target stays in reach so the reversed swing can smack it again.
-        e.hitTimer = SPIN_HIT_GAP; e.dir = -e.dir; api.damage(target, e.damage, self); api.sound('noseHit'); api.shake(.2);
+        const hx = e.x + dx * projection, hy = e.y + dy * projection;
+        // Sparks fly on in the direction the nose was swinging when it connected.
+        const swing = Math.atan2(dx * e.dir, -dy * e.dir), r = () => api.random();
+        for (let i = 0; i < 16; i++) {
+          const a = swing + (r() - .5) * 1.5, speed = 260 + r() * 420, life = .22 + r() * .2;
+          e.sparks.push({ x: hx, y: hy, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life, max: life, drag: 6, kind: 'spark', color: SPARK_COLORS[i % SPARK_COLORS.length] });
+        }
+        for (let i = 0; i < 6; i++) {
+          const a = r() * Math.PI * 2, speed = 90 + r() * 170, life = .35 + r() * .2;
+          e.sparks.push({ x: hx, y: hy, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life, max: life, drag: 4, kind: 'chunk', size: 3 + r() * 4, color: SKIN_COLORS[i % SKIN_COLORS.length] });
+        }
+        e.pops.push({ x: hx, y: hy, life: POP_LIFE, word: HIT_WORDS[Math.floor(r() * HIT_WORDS.length)], tilt: (r() - .5) * .6 });
+        e.hitTimer = SPIN_HIT_GAP; e.stop = HIT_STOP; e.dir = -e.dir; api.damage(target, e.damage, self); api.sound('spinHit'); api.shake(.4);
       }
     },
     draw(ctx, e, self) {
@@ -109,8 +159,9 @@
           drawNoseShape(ctx, e.length, e.width); ctx.restore();
         }
       }
-      ctx.translate(e.x, e.y); ctx.rotate(e.angle);
-      drawNoseShape(ctx, e.length, e.width);
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle);
+      drawNoseShape(ctx, e.length, e.width); ctx.restore();
+      if (e.mode === 'spin') drawSpinHits(ctx, e);
     }
   };
   global.ArenaNosePreset = {
