@@ -80,11 +80,13 @@ function poke(offset) {
   Object.assign(self, { x: 360, y: 360, vx: 0, vy: 0, speed: 0.0001 });
   Object.assign(target, { x: 360 + p.ultRange * .7, y: 360, vx: 0, vy: 0, speed: 0.0001 });
   types.nose.ultimate.cast(b.api, self, target, p);
-  const hp = target.hp; let hits = 0, prev = hp;
+  const hp = target.hp; let hits = 0, prev = hp; const dirs = [];
   for (let i = 0; i < 120 * 2.7; i++) {
     Object.assign(target, { x: 360 + p.ultRange * .7, y: 360 });
-    step(b); if (target.hp < prev) { hits++; assert.equal(prev - target.hp, p.ultDamage); prev = target.hp; }
+    step(b); if (target.hp < prev) { hits++; dirs.push(b.effects.find(e => e.mode === 'spin').dir); assert.equal(prev - target.hp, p.ultDamage); prev = target.hp; }
   }
   assert.ok(hits >= 4 && hits <= 9, `여러 번 적중 (${hits})`);
+  assert.ok(dirs.every((d, i) => i === 0 || d === -dirs[i - 1]), '맞을 때마다 회전 방향이 반대로 바뀜');
+  assert.equal(dirs[0], -1, '첫 적중 후 반대 방향');
 }
 console.log('ultimate ok');

@@ -44,7 +44,7 @@
       duration: SPIN_GROW + SPIN_TIME + SPIN_SHRINK,
       cast(api, self, target, p) {
         api.effect('nose', self, { mode: 'spin', damage: p.ultDamage, range: p.ultRange, width: p.width,
-          angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, turn: 0, hitTimer: 0 }, SPIN_GROW + SPIN_TIME + SPIN_SHRINK);
+          angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, turn: 0, dir: 1, hitTimer: 0 }, SPIN_GROW + SPIN_TIME + SPIN_SHRINK);
         api.shake(.35);
       }
     },
@@ -77,15 +77,17 @@
       const spinEnd = SPIN_GROW + SPIN_TIME;
       const ratio = e.age < SPIN_GROW ? 1 - Math.pow(1 - e.age / SPIN_GROW, 2) : e.age < spinEnd ? 1 : Math.max(0, 1 - (e.age - spinEnd) / SPIN_SHRINK);
       // Spin up while the nose stretches, full speed for the spin, wind down as it shrinks.
-      e.turn = SPIN_TURN * ratio; e.angle += e.turn * dt;
-      self.spin = 6;
+      // dir flips on every hit, so the nose whips back the other way like repeated slaps.
+      e.turn = SPIN_TURN * ratio; e.angle += e.dir * e.turn * dt;
+      self.spin = 6 * e.dir;
       const dx = Math.cos(e.angle), dy = Math.sin(e.angle);
       e.x = self.x + dx * self.radius * .55; e.y = self.y + dy * self.radius * .55;
       e.length = e.range * ratio;
       const projection = Math.max(0, Math.min(e.length, (target.x - e.x) * dx + (target.y - e.y) * dy));
       const distance = Math.hypot(target.x - (e.x + dx * projection), target.y - (e.y + dy * projection));
       if (e.hitTimer <= 0 && e.age <= spinEnd && ratio > .5 && distance <= target.radius + e.width / 2) {
-        e.hitTimer = SPIN_HIT_GAP; api.damage(target, e.damage, self); api.pushAway(target, self); api.sound('noseHit'); api.shake(.2);
+        // No knockback here: the target stays in reach so the reversed swing can smack it again.
+        e.hitTimer = SPIN_HIT_GAP; e.dir = -e.dir; api.damage(target, e.damage, self); api.sound('noseHit'); api.shake(.2);
       }
     },
     draw(ctx, e, self) {
@@ -97,11 +99,11 @@
         ctx.globalAlpha = .1 * blur; ctx.fillStyle = self.color;
         ctx.beginPath(); ctx.arc(0, 0, reach, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = .45 * blur; ctx.strokeStyle = self.color; ctx.lineWidth = e.width * .7; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.arc(0, 0, reach - e.width * .35, e.angle - 1.4 * blur, e.angle); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, reach - e.width * .35, e.angle - e.dir * 1.4 * blur, e.angle, e.dir < 0); ctx.stroke();
         ctx.restore();
-        // Afterimages of the nose just behind its current angle.
+        // Afterimages of the nose just behind its current angle (behind = against the swing direction).
         for (const k of [3, 2, 1]) {
-          const back = e.angle - k * .22 * blur;
+          const back = e.angle - e.dir * k * .22 * blur;
           ctx.save(); ctx.globalAlpha = .12 * (4 - k) * blur;
           ctx.translate(self.x + Math.cos(back) * self.radius * .55, self.y + Math.sin(back) * self.radius * .55); ctx.rotate(back);
           drawNoseShape(ctx, e.length, e.width); ctx.restore();
