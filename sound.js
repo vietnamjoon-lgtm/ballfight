@@ -1,4 +1,4 @@
-// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw, bread-eating, berserk awaken/slam and club-grinder sounds. No background music.
+// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw, bread-eating, berserk awaken/slam and nose-grinder sounds. No background music.
 (function (global) {
   'use strict';
   class ArenaWallSound {
@@ -39,7 +39,7 @@
       gain.gain.setValueAtTime(.7, c.currentTime);
       source.connect(gain); gain.connect(c.destination); this.flight = { source, gain }; source.start(0, 0);
     }
-    // Belt-grinder loop that runs for as long as a club ultimate is spinning, then fades out.
+    // Belt-grinder loop that runs for as long as a nose-grinder ultimate is spinning, then fades out.
     setGrinder(active) {
       const c = this.context;
       if (!active || !this.enabled || !c || c.state !== 'running') {

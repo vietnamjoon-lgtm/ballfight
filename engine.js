@@ -1,8 +1,8 @@
 (function (global) {
   'use strict';
   const SIZE = 720, PAD = 6, IDLE_SPIN = 1.4;
-  // Every normal skill cast fills this share of the ultimate gauge (5 casts = full).
-  const ULT_CHARGE = .2;
+  // Ultimate gauge gain from bouncing: each wall bounce and each bump into the opponent.
+  const ULT_CHARGE = Object.freeze({ wall: .03, bump: .02 });
   const copy = value => JSON.parse(JSON.stringify(value));
   const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
   const RETIRED_TYPES = ['askFight'];
@@ -64,6 +64,7 @@
         sound: type => { if (this.audioEvents.length < 16) this.audioEvents.push({ type }); },
         shake: amount => { this.shakeRequest = Math.max(this.shakeRequest, amount); },
         log: text => this.log(text),
+        chargeUltimate: (self, amount) => this.chargeUltimate(self, amount),
         explosion: (target, amount, source) => this.damage(target, amount, source, 'explosion'),
         effect: (type, self, state, duration) => {
           if (!own(this.types, type) || typeof this.types[type].update !== 'function' || !Number.isFinite(duration) || duration <= 0) throw Error('지속 능력 등록을 확인하세요.');
@@ -87,7 +88,8 @@
       } else if (this.state === 'paused') this.state = 'running';
     }
     pause() { if (this.state === 'running') this.state = 'paused'; }
-    chargeUltimate(f) { if (f.ultIndex >= 0 && f.ultTime <= 0) f.ult = Math.min(1, f.ult + ULT_CHARGE); }
+    // Nothing charges while the ultimate itself is running.
+    chargeUltimate(f, amount) { if (f.ultIndex >= 0 && f.ultTime <= 0 && amount > 0) f.ult = Math.min(1, f.ult + amount); }
     tryUltimate(f) {
       if (f.ultIndex < 0 || f.ult < 1 || f.ultTime > 0 || f.rooted) return;
       const skill = f.skills[f.ultIndex], ult = this.types[skill.type].ultimate;
@@ -117,7 +119,7 @@
         else if (f[axis] >= hi) { hit ||= f[v] > 0; f[axis] = hi; f[v] = -Math.abs(f[v]); }
       }
       // Only fighter bounces generate audio events; correction and projectile hits stay silent.
-      if (hit && Number.isInteger(f.slot) && !this.wallHits.some(e => e.slot === f.slot)) this.wallHits.push({ slot: f.slot });
+      if (hit && Number.isInteger(f.slot) && !this.wallHits.some(e => e.slot === f.slot)) { this.wallHits.push({ slot: f.slot }); this.chargeUltimate(f, ULT_CHARGE.wall); }
     }
     separateFighters(a, b) {
       const dx = b.x - a.x, dy = b.y - a.y, distance = Math.hypot(dx, dy), minimum = a.radius + b.radius;
@@ -189,7 +191,7 @@
           // Regular skills wait while the ultimate is running.
           if (this.types[skill.type].trigger === 'pickup' || f.rooted || f.ultTime > 0) continue;
           skill.remaining -= dt;
-          if (skill.remaining <= 0) { this.types[skill.type].cast(this.api, f, this.fighters[1 - f.slot], skill.params, skill); skill.remaining += skill.cooldown; this.log(`${f.name} · ${skill.name}`); this.chargeUltimate(f); }
+          if (skill.remaining <= 0) { this.types[skill.type].cast(this.api, f, this.fighters[1 - f.slot], skill.params, skill); skill.remaining += skill.cooldown; this.log(`${f.name} · ${skill.name}`); }
         }
         this.tryUltimate(f);
         if (!f.rooted) { f.x += f.vx * dt; f.y += f.vy * dt; this.wall(f); }
@@ -200,7 +202,7 @@
         if (this.contactTimer <= 0) {
           const hit = f => f.contactDamage + (f.dash && !f.dash.hit ? f.dash.damage : 0);
           const da = hit(a), db = hit(b); this.damage(a, db); this.damage(b, da);
-          for (const f of [a, b]) if (f.dash) f.dash.hit = true;
+          for (const f of [a, b]) { if (f.dash) f.dash.hit = true; this.chargeUltimate(f, ULT_CHARGE.bump); }
           this.api.sound('bump');
           this.contactTimer = .35;
         }
