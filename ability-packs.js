@@ -44,7 +44,7 @@
       cast(api, self, target, p) {
         api.effect('nose', self, { mode: 'club', damage: p.ultDamage, range: p.ultRange, width: p.width * CLUB_THICK,
           angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, thick: 0, turn: 0, hitTimer: 0 }, CLUB_GROW + CLUB_SPIN + CLUB_SHRINK);
-        api.sound('awaken'); api.shake(.35);
+        api.shake(.35);
       }
     },
     cast(api, self, target, p) {
