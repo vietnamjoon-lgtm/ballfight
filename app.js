@@ -95,6 +95,13 @@
     for (const f of battle.fighters) {
       $('card' + f.slot).style.setProperty('--c', f.color); const host = $('skills' + f.slot); host.replaceChildren();
       if (!f.skills.length) { const text = document.createElement('p'); text.className = 'empty-skill'; text.textContent = '장착 능력 없음 · 접촉으로 공격'; host.append(text); }
+      if (f.ultIndex >= 0) {
+        const label = document.createElement('div'); label.className = 'skill-label ult-label';
+        const name = document.createElement('span'); name.textContent = '궁극기 · ' + types[f.skills[f.ultIndex].type].ultimate.name;
+        const remaining = document.createElement('span'); remaining.id = `ult-text-${f.slot}`; label.append(name, remaining);
+        const bar = document.createElement('div'); bar.className = 'bar ult';
+        const fill = document.createElement('div'); fill.className = 'fill'; fill.id = `ult-${f.slot}`; bar.append(fill); host.append(label, bar);
+      }
       f.skills.forEach((skill, i) => {
         const label = document.createElement('div'); label.className = 'skill-label';
         const name = document.createElement('span'); name.textContent = skill.name;
@@ -117,6 +124,12 @@
         $(`cd-${f.slot}-${i}`).textContent = status ? status.label : Math.max(0, skill.remaining).toFixed(1) + 's';
         $(`skill-${f.slot}-${i}`).style.width = Math.max(0, Math.min(100, (status ? status.progress : 1 - skill.remaining / skill.cooldown) * 100)) + '%';
       });
+      if (f.ultIndex >= 0) {
+        const duration = types[f.skills[f.ultIndex].type].ultimate.duration;
+        $(`ult-text-${f.slot}`).textContent = f.ultTime > 0 ? '발동 중!' : f.ult >= 1 ? '준비!' : Math.floor(f.ult * 100) + '%';
+        $(`ult-${f.slot}`).style.width = (f.ultTime > 0 ? f.ultTime / duration : f.ult) * 100 + '%';
+        $(`ult-${f.slot}`).parentElement.classList.toggle('ready', f.ult >= 1 || f.ultTime > 0);
+      }
     }
     if (lastEvent !== battle.eventId) {
       lastEvent = battle.eventId; $('battle-log').replaceChildren();
@@ -152,6 +165,11 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
         for (const offset of [-f.radius * .2, f.radius * .2]) circle(f.x + Math.cos(angle) * f.radius * .35 - Math.sin(angle) * offset, f.y + Math.sin(angle) * f.radius * .35 + Math.cos(angle) * offset, Math.max(2, f.radius / 8), '#122031');
       }
       ctx.strokeStyle = f.shield > 0 ? '#3fa9f5' : '#222'; ctx.lineWidth = f.shield > 0 ? 3 : 2; ctx.beginPath(); ctx.arc(f.x, f.y, f.radius + (f.shield > 0 ? 7 : 1), 0, Math.PI * 2); ctx.stroke();
+      // Ultimate gauge: a gold arc filling clockwise around the ball, pulsing once it's full.
+      if (f.ultIndex >= 0 && f.ult > 0 && !f.ultTime) {
+        ctx.strokeStyle = '#ffb300'; ctx.lineWidth = f.ult >= 1 ? 4 + Math.sin(last * .02) * 1.5 : 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.radius + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f.ult); ctx.stroke(); ctx.lineCap = 'butt';
+      }
       ctx.restore();
     }
     if (countdown) {

@@ -1,6 +1,8 @@
 (function (global) {
   'use strict';
   const SIZE = 720, PAD = 6, IDLE_SPIN = 1.4;
+  // Every normal skill cast fills this share of the ultimate gauge (5 casts = full).
+  const ULT_CHARGE = .2;
   const copy = value => JSON.parse(JSON.stringify(value));
   const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
   const RETIRED_TYPES = ['askFight'];
@@ -50,9 +52,11 @@
         const angle = random() * Math.PI * 2;
         return { ...copy(c), slot, maxHp: c.hp, x: slot ? 525 : 195, y: slot ? 450 : 270, vx: Math.cos(angle) * c.speed, vy: Math.sin(angle) * c.speed,
           skills: c.abilities.map(id => { const a = this.config.abilities.find(a => a.id === id); return { ...copy(a), remaining: a.cooldown }; }),
-          skillState: {}, dash: null, shield: 0, shieldTime: 0, damageReduction: 0, flash: 0, trail: [], spin: 0, facing: 0 };
+          skillState: {}, dash: null, shield: 0, shieldTime: 0, damageReduction: 0, flash: 0, trail: [], spin: 0, facing: 0, ult: 0, ultTime: 0 };
       });
       if (this.fighters.length !== 2) throw Error('두 명을 선택하세요.');
+      // The first equipped ability whose type defines an ultimate provides the character's ultimate.
+      for (const f of this.fighters) f.ultIndex = f.skills.findIndex(s => this.types[s.type].ultimate);
       this.api = Object.freeze({
         now: () => this.time,
         random: () => this.random(),
@@ -83,6 +87,16 @@
       } else if (this.state === 'paused') this.state = 'running';
     }
     pause() { if (this.state === 'running') this.state = 'paused'; }
+    chargeUltimate(f) { if (f.ultIndex >= 0 && f.ultTime <= 0) f.ult = Math.min(1, f.ult + ULT_CHARGE); }
+    tryUltimate(f) {
+      if (f.ultIndex < 0 || f.ult < 1 || f.ultTime > 0 || f.rooted) return;
+      const skill = f.skills[f.ultIndex], ult = this.types[skill.type].ultimate;
+      // Let the regular version of the skill finish first so the two never overlap.
+      if (this.effects.some(e => e.owner === f.slot && e.type === skill.type)) return;
+      f.ult = 0; f.ultTime = ult.duration;
+      ult.cast(this.api, f, this.fighters[1 - f.slot], skill.params, skill);
+      this.log(`${f.name} · 궁극기 ${ult.name}!`);
+    }
     ring(f, range, color = f.color) { this.rings.push({ x: f.x, y: f.y, from: f.radius, range, color, life: .45 }); }
     burst(f) { for (let i = 0; i < 9; i++) { const angle = this.random() * Math.PI * 2, speed = 70 + this.random() * 100; this.particles.push({ x: f.x, y: f.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .4, color: f.color }); } }
     damage(target, amount, source, kind = 'hit') {
@@ -170,11 +184,14 @@
         f.flash = Math.max(0, f.flash - dt); f.shieldTime -= dt; if (f.shieldTime <= 1e-8) { f.shieldTime = 0; f.shield = 0; }
         if (!f.rooted) f.facing += (f.spin + IDLE_SPIN) * dt; f.spin *= Math.max(0, 1 - dt * 3.2);
         if (f.dash) { f.dash.remaining -= dt; if (f.dash.remaining <= 0) { f.dash = null; this.normalize(f); } }
+        if (f.ultTime > 0) f.ultTime = Math.max(0, f.ultTime - dt);
         for (const skill of f.skills) {
-          if (this.types[skill.type].trigger === 'pickup' || f.rooted) continue;
+          // Regular skills wait while the ultimate is running.
+          if (this.types[skill.type].trigger === 'pickup' || f.rooted || f.ultTime > 0) continue;
           skill.remaining -= dt;
-          if (skill.remaining <= 0) { this.types[skill.type].cast(this.api, f, this.fighters[1 - f.slot], skill.params, skill); skill.remaining += skill.cooldown; this.log(`${f.name} · ${skill.name}`); }
+          if (skill.remaining <= 0) { this.types[skill.type].cast(this.api, f, this.fighters[1 - f.slot], skill.params, skill); skill.remaining += skill.cooldown; this.log(`${f.name} · ${skill.name}`); this.chargeUltimate(f); }
         }
+        this.tryUltimate(f);
         if (!f.rooted) { f.x += f.vx * dt; f.y += f.vy * dt; this.wall(f); }
         f.trail.push({ x: f.x, y: f.y }); if (f.trail.length > 14) f.trail.shift();
       }
@@ -221,5 +238,5 @@
       }
     }
   }
-  global.ArenaEngine = { Battle, validate, copy, SIZE, PAD };
+  global.ArenaEngine = { Battle, validate, copy, SIZE, PAD, ULT_CHARGE };
 })(globalThis);
