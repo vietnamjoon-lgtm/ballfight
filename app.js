@@ -125,10 +125,10 @@
         $(`skill-${f.slot}-${i}`).style.width = Math.max(0, Math.min(100, (status ? status.progress : 1 - skill.remaining / skill.cooldown) * 100)) + '%';
       });
       if (f.ultIndex >= 0) {
-        const duration = types[f.skills[f.ultIndex].type].ultimate.duration;
-        $(`ult-text-${f.slot}`).textContent = f.ultTime > 0 ? '발동 중!' : f.ult >= 1 ? '준비!' : Math.floor(f.ult * 100) + '%';
-        $(`ult-${f.slot}`).style.width = (f.ultTime > 0 ? f.ultTime / duration : f.ult) * 100 + '%';
-        $(`ult-${f.slot}`).parentElement.classList.toggle('ready', f.ult >= 1 || f.ultTime > 0);
+        const cut = battle.cutscene?.slot === f.slot ? battle.cutscene : null;
+        $(`ult-text-${f.slot}`).textContent = cut ? '발동 중!' : f.ult >= 1 ? '준비!' : Math.floor(f.ult * 100) + '%';
+        $(`ult-${f.slot}`).style.width = (cut ? cut.remaining / cut.duration : f.ult) * 100 + '%';
+        $(`ult-${f.slot}`).parentElement.classList.toggle('ready', f.ult >= 1 || Boolean(cut));
       }
     }
     if (lastEvent !== battle.eventId) {
@@ -147,6 +147,10 @@
     ctx.clearRect(0, 0, SIZE, SIZE); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, SIZE, SIZE); ctx.textAlign = 'center';
     ctx.save();
     if (effectsEnabled && shake > 0) { const strength = shake * 34; ctx.translate(Math.sin(last * .09) * strength, Math.cos(last * .11) * strength); }
+    if (battle.cutscene) {
+      const cam = cutCamera(battle.cutscene);
+      ctx.translate(SIZE / 2, SIZE / 2); ctx.scale(cam.k, cam.k); ctx.translate(-cam.x, -cam.y);
+    }
     ctx.lineWidth = 5; ctx.strokeStyle = '#111'; ctx.strokeRect(PAD - 2, PAD - 2, SIZE - PAD * 2 + 4, SIZE - PAD * 2 + 4);
     for (const ring of battle.rings) { ctx.globalAlpha = ring.life / .45; ctx.strokeStyle = ring.color; ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.from + (ring.range - ring.from) * (1 - ring.life / .45), 0, Math.PI * 2); ctx.stroke(); }
     ctx.globalAlpha = 1;
@@ -166,7 +170,7 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
       }
       ctx.strokeStyle = f.shield > 0 ? '#3fa9f5' : '#222'; ctx.lineWidth = f.shield > 0 ? 3 : 2; ctx.beginPath(); ctx.arc(f.x, f.y, f.radius + (f.shield > 0 ? 7 : 1), 0, Math.PI * 2); ctx.stroke();
       // Ultimate gauge: a gold arc filling clockwise around the ball, pulsing once it's full.
-      if (f.ultIndex >= 0 && f.ult > 0 && !f.ultTime) {
+      if (f.ultIndex >= 0 && f.ult > 0) {
         ctx.strokeStyle = '#ffb300'; ctx.lineWidth = f.ult >= 1 ? 4 + Math.sin(last * .02) * 1.5 : 3; ctx.lineCap = 'round';
         ctx.beginPath(); ctx.arc(f.x, f.y, f.radius + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f.ult); ctx.stroke(); ctx.lineCap = 'butt';
       }
@@ -190,9 +194,72 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
     for (const o of battle.orbits) { const owner = battle.fighters[o.owner]; ctx.strokeStyle = owner.color + '55'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(owner.x, owner.y, o.range, 0, Math.PI * 2); ctx.stroke(); ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.angle + Math.PI / 4); ctx.fillStyle = owner.color; ctx.fillRect(-8, -8, 16, 16); ctx.restore(); }
     for (const s of battle.shots) { ctx.shadowColor = s.color; ctx.shadowBlur = 12; circle(s.x, s.y, s.radius, s.color); } ctx.shadowBlur = 0;
     for (const p of battle.particles) { ctx.globalAlpha = p.life / .4; circle(p.x, p.y, 2.5, p.color); } ctx.globalAlpha = 1;
+    if (battle.cutscene) {
+      const cut = battle.cutscene, ult = types[cut.type].ultimate;
+      ctx.save(); ult.drawScene?.(ctx, cut, battle.fighters[cut.slot], battle.fighters[1 - cut.slot], cut.elapsed); ctx.restore();
+    }
     if (effectsEnabled) drawFeedback();
     ctx.restore();
     if (effectsEnabled && tint > 0) { ctx.fillStyle = `rgba(230, 20, 20, ${tint * .6})`; ctx.fillRect(PAD, PAD, SIZE - PAD * 2, SIZE - PAD * 2); }
+    if (battle.cutscene) drawCutscene(battle.cutscene);
+  }
+  const easeOut = t => 1 - (1 - t) ** 3, easeInOut = t => t < .5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  // Camera for an ultimate scene: push in on the caster for the banner, swing over to frame both fighters
+  // for the attack, then pull back out to the whole arena.
+  function cutCamera(cut) {
+    const self = battle.fighters[cut.slot], target = battle.fighters[1 - cut.slot], t = cut.elapsed, [start, end] = cut.attack;
+    const wide = { x: SIZE / 2, y: SIZE / 2, k: 1 }, close = { x: self.x, y: self.y, k: 1.45 };
+    const span = Math.hypot(target.x - self.x, target.y - self.y) + self.radius + target.radius + 220;
+    const both = { x: (self.x + target.x) / 2, y: (self.y + target.y) / 2, k: Math.max(1, Math.min(1.45, SIZE * .95 / span)) };
+    const mix = (a, b, u) => ({ x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), k: lerp(a.k, b.k, u) });
+    if (t < .15) return mix(wide, close, easeOut(t / .15));
+    if (t < start - .2) return close;
+    if (t < start) return mix(close, both, easeInOut((t - start + .2) / .2));
+    if (t < end) return both;
+    return mix(both, wide, easeInOut(Math.min(1, (t - end) / (cut.duration - end))));
+  }
+  function drawCutscene(cut) {
+    const f = battle.fighters[cut.slot], t = cut.elapsed, intro = cut.attack[0];
+    // Banner phase (until the attack starts): darken, speed lines, slanted name banner.
+    const enter = Math.min(1, t / .15), exit = Math.max(0, Math.min(1, (t - intro + .22) / .2)), vis = enter * (1 - exit);
+    // The attack stays lightly dimmed so the hits read, fading back to normal at the end.
+    const dim = t < intro ? .62 * vis + .2 * exit : t < cut.attack[1] ? .2 : .2 * Math.max(0, 1 - (t - cut.attack[1]) / (cut.duration - cut.attack[1]));
+    ctx.save();
+    ctx.fillStyle = `rgba(12, 10, 24, ${dim})`; ctx.fillRect(0, 0, SIZE, SIZE);
+    if (vis > 0) {
+      ctx.translate(SIZE / 2, SIZE / 2);
+      // Speed lines rushing in toward the middle, re-rolled every few frames.
+      let seed = Math.floor(last / 45) % 233280; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${.45 * vis})`; ctx.lineCap = 'round';
+      for (let i = 0; i < 46; i++) {
+        const a = rnd() * Math.PI * 2, from = 170 + rnd() * 110, to = from + 220 + rnd() * 260;
+        ctx.lineWidth = 1 + rnd() * 3.5; ctx.beginPath(); ctx.moveTo(Math.cos(a) * from, Math.sin(a) * from); ctx.lineTo(Math.cos(a) * to, Math.sin(a) * to); ctx.stroke();
+      }
+      // Slanted banner slides in from the left, holds, then whips out to the right.
+      ctx.rotate(-.18);
+      const slide = (1 - easeOut(enter)) * -950 + exit * exit * 950;
+      const band = ctx.createLinearGradient(0, -90, 0, 90); band.addColorStop(0, f.color); band.addColorStop(1, '#1c1430');
+      ctx.fillStyle = band; ctx.fillRect(-700 + slide, -86, 1400, 172);
+      ctx.fillStyle = '#fff'; ctx.fillRect(-700 + slide * 1.15, -98, 1400, 7); ctx.fillRect(-700 + slide * 1.15, 91, 1400, 7);
+      const px = -200 + slide * .9, r = 64;
+      circle(px, 0, r + 6, '#fff');
+      circle(px, 0, r, f.color);
+      if (!ArenaDrawPortrait(ctx, { ...f, x: px, y: 0, facing: 0 }, ArenaPortraitFx(f, types), images.get(f.id), images2.get(f.id), r, effectsEnabled)) {
+        for (const dy of [-r * .22, r * .22]) circle(px + r * .35, dy, r / 7, '#122031');
+      }
+      const tx = -112 + slide * 1.25;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      ctx.font = '800 22px Arial, "Malgun Gothic", sans-serif'; ctx.fillStyle = '#ffd54a'; ctx.fillText(`${f.name} · 궁극기`, tx, -40);
+      ctx.font = '900 66px Arial, "Malgun Gothic", sans-serif'; ctx.lineWidth = 9; ctx.strokeStyle = '#111';
+      ctx.strokeText(cut.name, tx, 18); ctx.fillStyle = '#fff'; ctx.fillText(cut.name, tx, 18);
+    }
+    ctx.restore();
+    // White flash as the ultimate is called, and a quick one on every hit (bigger on the last).
+    let flash = t < .08 ? .85 * (1 - t / .08) : 0;
+    cut.hitTimes.forEach((hit, k) => { const age = t - hit; if (age >= 0 && age < .1) flash = Math.max(flash, (k === cut.hitTimes.length - 1 ? .6 : .3) * (1 - age / .1)); });
+    if (flash > 0) { ctx.fillStyle = `rgba(255, 255, 255, ${flash})`; ctx.fillRect(0, 0, SIZE, SIZE); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   }
   function drawFeedback() {
     for (const hit of feedback) {
@@ -236,7 +303,8 @@ ctx.translate(0, globalThis.Arena67BodyOffset?.(f, battle) || 0);
       lastImpact = battle.impactId;
     }
     wallSound.setFlight(battle.state === 'running' && battle.effects.some(e => e.type === 'moneyMissile' && e.missiles.length > 0));
-    wallSound.setGrinder(battle.state === 'running' && battle.effects.some(e => e.mode === 'spin'));
+    const cut = battle.cutscene;
+    wallSound.setGrinder(battle.state === 'running' && Boolean(cut) && cut.elapsed >= cut.attack[0] && cut.elapsed < cut.attack[1]);
     draw(); requestAnimationFrame(frame);
   }
   function pause() { if (countdown) { countdown.paused = !countdown.paused; $('pause').textContent = countdown.paused ? '계속하기' : '일시정지'; updateUI(); return; } if (battle.state === 'running') { battle.pause(); wallSound.stopSamples(); $('pause').textContent = '계속하기'; } else if (battle.state === 'paused') { wallSound.unlock(); battle.start(); $('pause').textContent = '일시정지'; } updateUI(); }

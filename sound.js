@@ -132,6 +132,8 @@
         this.playOneShot('punch', .68);
       } else if (type === 'noseHit') {
         this.playOneShot('sword', .8);
+      } else if (type === 'ultCut') {
+        this.playClip('awaken', .8, 0, 1.4);
       } else if (type === 'spinHit') {
         this.playOneShot('spinHit', .9);
       } else if (type === 'orbHit') {
