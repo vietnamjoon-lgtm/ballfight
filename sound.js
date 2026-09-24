@@ -1,8 +1,8 @@
-// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw, bread-eating and berserk awaken/slam sounds. No background music.
+// Synthetic wall tap, missile launch/explosion, character bump, nose-hit, orb-hit, countdown-tick, 6/7 throw, bread-eating, berserk awaken/slam and club-grinder sounds. No background music.
 (function (global) {
   'use strict';
   class ArenaWallSound {
-    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.samples = { missile: null, punch: null, sword: null, tick: null, six: null, seven: null, breadEat: null, awaken: null, berserkSlam: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
+    constructor() { this.enabled = true; this.context = null; this.last = [-Infinity, -Infinity]; this.flight = null; this.grinder = null; this.samples = { missile: null, punch: null, sword: null, tick: null, six: null, seven: null, breadEat: null, awaken: null, berserkSlam: null, grinder: null }; this.loading = null; this.voices = new Set(); this.rate = 1; }
     loadMedia() {
       if (this.loading || !global.ArenaMedia || !this.context) return;
       const decode = key => {
@@ -11,17 +11,18 @@
         const bytes = Uint8Array.from(atob(media.split(',')[1]), c => c.charCodeAt(0));
         return this.context.decodeAudioData(bytes.buffer).catch(() => null);
       };
-      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick'), decode('six'), decode('seven'), decode('breadEat'), decode('awaken'), decode('berserkSlam')]).then(([missile, punch, sword, tick, six, seven, breadEat, awaken, berserkSlam]) => {
-        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick; this.samples.six = six; this.samples.seven = seven; this.samples.breadEat = breadEat; this.samples.awaken = awaken; this.samples.berserkSlam = berserkSlam;
+      this.loading = Promise.all([decode('sound'), decode('punch'), decode('sword'), decode('tick'), decode('six'), decode('seven'), decode('breadEat'), decode('awaken'), decode('berserkSlam'), decode('grinder')]).then(([missile, punch, sword, tick, six, seven, breadEat, awaken, berserkSlam, grinder]) => {
+        this.samples.missile = missile; this.samples.punch = punch; this.samples.sword = sword; this.samples.tick = tick; this.samples.six = six; this.samples.seven = seven; this.samples.breadEat = breadEat; this.samples.awaken = awaken; this.samples.berserkSlam = berserkSlam; this.samples.grinder = grinder;
       });
     }
     setRate(rate) {
       this.rate = rate;
       if (this.flight?.source.playbackRate) this.flight.source.playbackRate.value = rate;
+      if (this.grinder?.source.playbackRate) this.grinder.source.playbackRate.value = rate;
       for (const voice of this.voices) if (voice.source.playbackRate) voice.source.playbackRate.value = rate;
     }
     stopSamples() {
-      this.setFlight(false);
+      this.setFlight(false); this.setGrinder(false);
       for (const voice of this.voices) { voice.source.stop(); voice.source.disconnect(); voice.gain.disconnect(); }
       this.voices.clear();
     }
@@ -37,6 +38,25 @@
       if (source.playbackRate) source.playbackRate.value = this.rate;
       gain.gain.setValueAtTime(.7, c.currentTime);
       source.connect(gain); gain.connect(c.destination); this.flight = { source, gain }; source.start(0, 0);
+    }
+    // Belt-grinder loop that runs for as long as a club ultimate is spinning, then fades out.
+    setGrinder(active) {
+      const c = this.context;
+      if (!active || !this.enabled || !c || c.state !== 'running') {
+        if (this.grinder) {
+          const { source, gain } = this.grinder; this.grinder = null;
+          if (!c || c.state !== 'running') { source.stop(); source.disconnect(); gain.disconnect(); return; }
+          gain.gain.setValueAtTime(gain.gain.value, c.currentTime); gain.gain.linearRampToValueAtTime(0, c.currentTime + .2);
+          source.onended = () => { source.disconnect(); gain.disconnect(); }; source.stop(c.currentTime + .22);
+        }
+        return;
+      }
+      if (this.grinder || !this.samples.grinder) return;
+      const source = c.createBufferSource(), gain = c.createGain(); source.buffer = this.samples.grinder;
+      source.loop = true; source.loopStart = 1; source.loopEnd = this.samples.grinder.duration;
+      if (source.playbackRate) source.playbackRate.value = this.rate;
+      gain.gain.setValueAtTime(.75, c.currentTime);
+      source.connect(gain); gain.connect(c.destination); this.grinder = { source, gain }; source.start(0, 0);
     }
     sampleExplosion() {
       if (!this.samples.missile) return;
