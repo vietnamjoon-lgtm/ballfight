@@ -5,105 +5,13 @@
   // User-supplied nose photo (assets/nose.png), embedded as base64 in media.js for offline file:// use.
   const noseImage = typeof Image !== 'undefined' && global.ArenaMedia ? new Image() : null;
   if (noseImage) noseImage.src = global.ArenaMedia.nose;
-  const NOSE_CHARGE_GRAZE = .12, NOSE_CHARGE_CENTER = .17;
-  // Ultimate "nose grinder" is a Tekken-style scene: banner intro, then the nose whips back and forth across
-  // the target landing HIT_COUNT hits HIT_GAP apart (reversing on every hit), then the camera pulls back.
-  const HIT_COUNT = 5, HIT_GAP = .28, FIRST_HIT = 1.1, ATTACK = [.95, 2.45], SCENE_TIME = 2.8;
-  const HIT_TIMES = Array.from({ length: HIT_COUNT }, (_, i) => +(FIRST_HIT + i * HIT_GAP).toFixed(3));
-  const BURST_LIFE = .4, SPARK_COLORS = ['#ffd000', '#ffb300', '#ff6a00', '#ff2d2d'], SKIN_COLORS = ['#f6c4b2', '#df9589', '#c46e6e'];
-  const easeOut = t => 1 - (1 - t) ** 3;
-  // Sideways swing of the nose around the line to the target: crosses 0 (the target) at every hit time, in
-  // alternating directions, and lingers near the contact point so each hit reads as a heavy smack.
-  const swingAt = (time, amplitude) => { const s = Math.sin(Math.PI * (time - FIRST_HIT) / HIT_GAP); return amplitude * Math.sign(s) * Math.abs(s) ** 1.8; };
-  // One hit's burst, fully determined by (hit index, age) so the scene can be redrawn at any time without state.
-  function drawHitBurst(ctx, k, age, x, y, swing, big) {
-    let seed = (k + 1) * 7919; const r = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
-    const t = age / BURST_LIFE, travel = age * (1 - age * 1.15);
-    ctx.lineCap = 'round';
-    for (let i = 0; i < (big ? 26 : 16); i++) {
-      const a = swing + (r() - .5) * 1.6, speed = 300 + r() * 480, life = .5 + r() * .5;
-      if (t > life) continue;
-      const px = x + Math.cos(a) * speed * travel, py = y + Math.sin(a) * speed * travel, tail = .045 * (1 - t);
-      ctx.globalAlpha = 1 - t / life; ctx.strokeStyle = SPARK_COLORS[i % SPARK_COLORS.length]; ctx.lineWidth = 2.5 + 4 * (1 - t);
-      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - Math.cos(a) * speed * tail, py - Math.sin(a) * speed * tail); ctx.stroke();
-    }
-    for (let i = 0; i < 6; i++) {
-      const a = r() * Math.PI * 2, speed = 110 + r() * 180, size = 3 + r() * 4;
-      ctx.globalAlpha = 1 - t; ctx.fillStyle = SKIN_COLORS[i % SKIN_COLORS.length];
-      ctx.beginPath(); ctx.arc(x + Math.cos(a) * speed * travel, y + Math.sin(a) * speed * travel, size * (1 - t * .5), 0, Math.PI * 2); ctx.fill();
-    }
-    // Shock ring + starburst flash for the first instant.
-    ctx.globalAlpha = 1 - t; ctx.strokeStyle = '#ff6a00'; ctx.lineWidth = 5 * (1 - t);
-    ctx.beginPath(); ctx.arc(x, y, 16 + t * (big ? 140 : 90), 0, Math.PI * 2); ctx.stroke();
-    if (t < .35) {
-      const f = 1 - t / .35, spikes = 8, tilt = (r() - .5) * .6, grow = big ? 1.5 : 1;
-      ctx.globalAlpha = f; ctx.fillStyle = '#fff6b0'; ctx.strokeStyle = '#ff9f1c'; ctx.lineWidth = 3;
-      ctx.beginPath();
-      for (let i = 0; i < spikes * 2; i++) { const a = i * Math.PI / spikes + tilt, rad = (i % 2 ? 16 : 46) * grow * (.6 + t * 1.6); ctx.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad); }
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-  // Draws the nose along local +x from 0 to length: the photo when decoded, else a vector nose.
-  function drawNoseShape(ctx, length, width) {
-    if (noseImage?.complete && noseImage.naturalWidth) {
-      // Source photo's wide end reaches toward the target (local +x); its tapered tip stays at the body (x=0).
-      // Drawn a bit wider than the hit width so the photo's own taper never thins to nothing at the seam —
-      // it's still one continuous stretched photo, just chunkier, instead of a separate patch shape glued on.
-      const drawWidth = width * 1.6;
-      ctx.save();
-      ctx.translate(length, 0); ctx.rotate(Math.PI / 2);
-      ctx.drawImage(noseImage, -drawWidth / 2, 0, drawWidth, length);
-      ctx.restore();
-    } else {
-      // Fallback vector nose while the embedded photo is still decoding.
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = '#6c3434'; ctx.lineWidth = width + 4;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(length, 0); ctx.stroke();
-      const skin = ctx.createLinearGradient(0, -width / 2, 0, width / 2);
-      skin.addColorStop(0, '#f6c4b2'); skin.addColorStop(.4, '#df9589'); skin.addColorStop(1, '#aa5558');
-      ctx.strokeStyle = skin; ctx.lineWidth = width;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(length, 0); ctx.stroke();
-    }
-  }
   global.ArenaAbilities.nose = {
     label: '늘어나는 코',
-    description: '발동 순간 상대 방향으로 코를 뻗었다가 회수합니다. 실제 코에 닿아야 적중하며 한 번 뻗을 때 한 번만 피해를 줍니다. 궁극기: 싸움이 멈추고 연출이 나오며, 코로 상대를 왕복으로 5번 후려쳐 거리·보호막과 관계없이 항상 같은 피해를 줍니다.',
+    description: '발동 순간 상대 방향으로 코를 뻗었다가 회수합니다. 실제 코에 닿아야 적중하며 한 번 뻗을 때 한 번만 피해를 줍니다.',
     fields: {
       damage: field('피해', 1, 100, 1, 24), range: field('최대 길이', 80, 600, 10, 380),
       width: field('코 두께', 8, 60, 1, 24), extend: field('늘어나는 시간 (초)', .1, 1, .05, .25),
-      hold: field('유지 시간 (초)', 0, 1, .05, .15), retract: field('돌아오는 시간 (초)', .1, 1, .05, .3),
-      ultTotal: field('궁극기 총 피해', 1, 300, 1, 50)
-    },
-    ultimate: {
-      name: '코 분쇄기',
-      scene: { duration: SCENE_TIME, attack: ATTACK, hits: HIT_TIMES },
-      damage: p => p.ultTotal,
-      // Drawn in arena coordinates while the fight is frozen; `time` is seconds since the scene started.
-      drawScene(ctx, cut, self, target, time) {
-        const [start, end] = cut.attack;
-        if (time < start || time > end + BURST_LIFE) return;
-        const dx = target.x - self.x, dy = target.y - self.y, dist = Math.max(1, Math.hypot(dx, dy)), base = Math.atan2(dy, dx);
-        const amplitude = Math.max(.3, Math.min(1.1, Math.atan(target.radius * 2.6 / dist)));
-        const reach = Math.min(1, (time - start) / .15, Math.max(0, (end - time) / .2));
-        const length = Math.max(0, dist - self.radius * .55) * easeOut(Math.max(0, reach));
-        const width = cut.params.width * 1.5; // a little chunkier than the regular poke so it reads in the scene
-        if (length > 0) {
-          // Motion afterimages trailing the swing, then the nose itself.
-          for (const k of [4, 3, 2, 1, 0]) {
-            const a = base + swingAt(time - k * .018, amplitude);
-            ctx.save(); ctx.globalAlpha = k ? .1 * (5 - k) : 1;
-            ctx.translate(self.x + Math.cos(a) * self.radius * .55, self.y + Math.sin(a) * self.radius * .55); ctx.rotate(a);
-            drawNoseShape(ctx, length, width); ctx.restore();
-          }
-        }
-        cut.hitTimes.forEach((hit, k) => {
-          const age = time - hit;
-          if (age < 0 || age > BURST_LIFE) return;
-          const swing = base + (k % 2 ? -1 : 1) * Math.PI / 2;
-          drawHitBurst(ctx, k, age, target.x - Math.cos(base) * target.radius * .6, target.y - Math.sin(base) * target.radius * .6, swing, k === cut.hitTimes.length - 1);
-        });
-      }
+      hold: field('유지 시간 (초)', 0, 1, .05, .15), retract: field('돌아오는 시간 (초)', .1, 1, .05, .3)
     },
     cast(api, self, target, p) {
       api.effect('nose', self, { ...p, angle: Math.atan2(target.y - self.y, target.x - self.x), age: 0, length: 0, hit: false }, p.extend + p.hold + p.retract);
@@ -122,16 +30,30 @@
       const distance = Math.hypot(target.x - (e.x + dx * projection), target.y - (e.y + dy * projection));
       if (!e.hit && e.age <= e.extend + e.hold && e.length > 0 && distance <= target.radius + e.width / 2) {
         e.hit = true; api.damage(target, e.damage, self); api.pushAway(target, self); api.sound('noseHit');
-        // Ultimate charge: a graze gives 12%, a dead-centre poke 17%, scaled by how far the target's centre sits off the nose's line.
-        const offset = Math.abs((target.x - e.x) * dy - (target.y - e.y) * dx);
-        const precision = Math.max(0, 1 - offset / (target.radius + e.width / 2));
-        api.chargeUltimate?.(self, NOSE_CHARGE_GRAZE + (NOSE_CHARGE_CENTER - NOSE_CHARGE_GRAZE) * precision);
       }
     },
     draw(ctx, e) {
       if (!e.length) return;
       ctx.translate(e.x, e.y); ctx.rotate(e.angle);
-      drawNoseShape(ctx, e.length, e.width);
+      if (noseImage?.complete && noseImage.naturalWidth) {
+        // Source photo's wide end reaches toward the target (local +x); its tapered tip stays at the body (x=0).
+        // Drawn a bit wider than the hit width so the photo's own taper never thins to nothing at the seam —
+        // it's still one continuous stretched photo, just chunkier, instead of a separate patch shape glued on.
+        const drawWidth = e.width * 1.6;
+        ctx.save();
+        ctx.translate(e.length, 0); ctx.rotate(Math.PI / 2);
+        ctx.drawImage(noseImage, -drawWidth / 2, 0, drawWidth, e.length);
+        ctx.restore();
+      } else {
+        // Fallback vector nose while the embedded photo is still decoding.
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#6c3434'; ctx.lineWidth = e.width + 4;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(e.length, 0); ctx.stroke();
+        const skin = ctx.createLinearGradient(0, -e.width / 2, 0, e.width / 2);
+        skin.addColorStop(0, '#f6c4b2'); skin.addColorStop(.4, '#df9589'); skin.addColorStop(1, '#aa5558');
+        ctx.strokeStyle = skin; ctx.lineWidth = e.width;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(e.length, 0); ctx.stroke();
+      }
     }
   };
   global.ArenaNosePreset = {
