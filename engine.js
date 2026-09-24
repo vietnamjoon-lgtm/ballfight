@@ -45,14 +45,14 @@
   class Battle {
     constructor(config, selected, types = global.ArenaAbilities, random = Math.random) {
       this.types = types; this.config = validate(config, types); this.random = random;
-      this.sharedState = new Map(); this.audioEvents = []; this.wallHits = []; this.shakeRequest = 0; this.time = 0; this.state = 'ready'; this.winner = null; this.contactTimer = 0;
+      this.sharedState = new Map(); this.audioEvents = []; this.wallHits = []; this.shakeRequest = 0; this.time = 0; this.cutscene = null; this.state = 'ready'; this.winner = null; this.contactTimer = 0;
       this.effects = []; this.impacts = []; this.impactId = 0; this.shots = []; this.particles = []; this.rings = []; this.orbits = []; this.events = []; this.eventId = 0;
       this.fighters = selected.map((id, slot) => {
         const c = this.config.characters.find(c => c.id === id); if (!c) throw Error('캐릭터를 선택하세요.');
         const angle = random() * Math.PI * 2;
         return { ...copy(c), slot, maxHp: c.hp, x: slot ? 525 : 195, y: slot ? 450 : 270, vx: Math.cos(angle) * c.speed, vy: Math.sin(angle) * c.speed,
           skills: c.abilities.map(id => { const a = this.config.abilities.find(a => a.id === id); return { ...copy(a), remaining: a.cooldown }; }),
-          skillState: {}, dash: null, shield: 0, shieldTime: 0, damageReduction: 0, flash: 0, trail: [], spin: 0, facing: 0, ult: 0, ultTime: 0 };
+          skillState: {}, dash: null, shield: 0, shieldTime: 0, damageReduction: 0, flash: 0, trail: [], spin: 0, facing: 0, ult: 0 };
       });
       if (this.fighters.length !== 2) throw Error('두 명을 선택하세요.');
       // The first equipped ability whose type defines an ultimate provides the character's ultimate.
@@ -88,16 +88,37 @@
       } else if (this.state === 'paused') this.state = 'running';
     }
     pause() { if (this.state === 'running') this.state = 'paused'; }
-    // Nothing charges while the ultimate itself is running.
-    chargeUltimate(f, amount) { if (f.ultIndex >= 0 && f.ultTime <= 0 && amount > 0) f.ult = Math.min(1, f.ult + amount); }
+    trueDamage(target, amount) {
+      const actual = Math.min(target.hp, amount); if (!(actual > 0)) return;
+      target.hp -= actual; target.flash = .22;
+      this.impacts.push({ id: ++this.impactId, x: target.x, y: target.y, amount: actual, absorbed: 0, kind: 'ultimate', power: 1 });
+      if (this.impacts.length > 20) this.impacts.shift();
+    }
+    stepCutscene(dt) {
+      const cut = this.cutscene, target = this.fighters[1 - cut.slot];
+      cut.elapsed += dt; cut.remaining = Math.max(0, cut.duration - cut.elapsed);
+      for (const f of this.fighters) f.flash = Math.max(0, f.flash - dt);
+      while (cut.nextHit < cut.hitTimes.length && cut.elapsed >= cut.hitTimes[cut.nextHit] - 1e-9) {
+        const last = ++cut.nextHit === cut.hitTimes.length, amount = last ? cut.total - cut.dealt : cut.total / cut.hitTimes.length;
+        this.trueDamage(target, amount); cut.dealt += amount;
+        this.api.sound('spinHit'); this.api.shake(last ? .7 : .4);
+      }
+      if (cut.elapsed >= cut.duration - 1e-9) this.cutscene = null;
+    }
+    // Nothing charges while an ultimate scene is playing.
+    chargeUltimate(f, amount) { if (f.ultIndex >= 0 && !this.cutscene && amount > 0) f.ult = Math.min(1, f.ult + amount); }
     tryUltimate(f) {
-      if (f.ultIndex < 0 || f.ult < 1 || f.ultTime > 0 || f.rooted) return;
+      if (f.ultIndex < 0 || f.ult < 1 || this.cutscene || f.rooted) return;
       const skill = f.skills[f.ultIndex], ult = this.types[skill.type].ultimate;
       // Let the regular version of the skill finish first so the two never overlap.
       if (this.effects.some(e => e.owner === f.slot && e.type === skill.type)) return;
-      f.ult = 0; f.ultTime = ult.duration;
-      ult.cast(this.api, f, this.fighters[1 - f.slot], skill.params, skill);
-      this.log(`${f.name} · 궁극기 ${ult.name}!`);
+      // Tekken-style: the fight freezes and the scene plays; its hits always land for the same fixed total,
+      // ignoring distance, shields and damage reduction.
+      const { duration, attack, hits } = ult.scene;
+      f.ult = 0;
+      this.cutscene = { slot: f.slot, type: skill.type, name: ult.name, params: copy(skill.params), duration, attack: [...attack], hitTimes: [...hits], nextHit: 0,
+        total: ult.damage(skill.params), dealt: 0, elapsed: 0, remaining: duration };
+      this.log(`${f.name} · 궁극기 ${ult.name}!`); this.api.sound('ultCut');
     }
     ring(f, range, color = f.color) { this.rings.push({ x: f.x, y: f.y, from: f.radius, range, color, life: .45 }); }
     burst(f) { for (let i = 0; i < 9; i++) { const angle = this.random() * Math.PI * 2, speed = 70 + this.random() * 100; this.particles.push({ x: f.x, y: f.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .4, color: f.color }); } }
@@ -181,15 +202,15 @@
       this.wallHits = []; this.audioEvents = []; this.shakeRequest = 0;
       if (this.state !== 'running') return;
       if (!(dt > 0 && dt <= 1 / 60)) throw Error('물리 계산은 1/60초 이하 간격으로 실행하세요.');
+      // During an ultimate scene nothing else moves: no clock, cooldowns, physics or effects.
+      if (this.cutscene) { this.stepCutscene(dt); return; }
       this.time += dt; this.contactTimer = Math.max(0, this.contactTimer - dt);
       for (const f of this.fighters) {
         f.flash = Math.max(0, f.flash - dt); f.shieldTime -= dt; if (f.shieldTime <= 1e-8) { f.shieldTime = 0; f.shield = 0; }
         if (!f.rooted) f.facing += (f.spin + IDLE_SPIN) * dt; f.spin *= Math.max(0, 1 - dt * 3.2);
         if (f.dash) { f.dash.remaining -= dt; if (f.dash.remaining <= 0) { f.dash = null; this.normalize(f); } }
-        if (f.ultTime > 0) f.ultTime = Math.max(0, f.ultTime - dt);
         for (const skill of f.skills) {
-          // Regular skills wait while the ultimate is running.
-          if (this.types[skill.type].trigger === 'pickup' || f.rooted || f.ultTime > 0) continue;
+          if (this.types[skill.type].trigger === 'pickup' || f.rooted) continue;
           skill.remaining -= dt;
           if (skill.remaining <= 0) { this.types[skill.type].cast(this.api, f, this.fighters[1 - f.slot], skill.params, skill); skill.remaining += skill.cooldown; this.log(`${f.name} · ${skill.name}`); }
         }

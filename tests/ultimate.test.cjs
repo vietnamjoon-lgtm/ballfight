@@ -57,37 +57,54 @@ function poke(offset) {
   assert.ok(graze >= .12 && graze < .125, `살짝 스치면 12% (${graze})`);
   const mid = poke(edge / 2); assert.ok(mid > .13 && mid < .16, '중간은 그 사이');
 }
-{
-  // Full gauge fires the ultimate; nothing charges while it spins.
-  const b = setup(), [self, other] = b.fighters, cd = self.skills[0].cooldown;
+const scene = types.nose.ultimate.scene;
+function ultimate(place) {
+  const b = setup(), [self, target] = b.fighters;
+  place?.(b, self, target);
   self.ult = 1;
-  while (!b.events.some(e => e.text.includes('궁극기'))) { step(b); assert.ok(b.time < cd * 3, '궁극기가 발동해야 함'); }
-  assert.equal(self.ult, 0, '발동하면 게이지 초기화');
-  assert.ok(self.ultTime > 0);
-  const spin = b.effects.find(e => e.owner === 0 && e.mode === 'spin'); assert.ok(spin, '코 회전 효과 생성');
-  assert.equal(spin.width, self.skills[0].params.width, '코는 원래 두께 그대로');
-  assert.equal(b.effects.filter(e => e.owner === 0 && e.type === 'nose').length, 1, '일반 코와 겹치지 않음');
-  // No regular casts and no gauge gain while the ultimate runs.
-  const remaining = self.skills[0].remaining, start = b.time;
-  while (self.ultTime > 0) { step(b); if (self.ultTime > 0) { assert.equal(self.skills[0].remaining, remaining); assert.equal(self.ult, 0); } }
-  const duration = b.time - start;
-  assert.ok(duration > 2 && duration < 3, '코 분쇄기는 약 2초 회전');
-  assert.equal(b.effects.filter(e => e.mode === 'spin').length, 0, '끝나면 사라짐');
+  while (!b.cutscene) { step(b); assert.ok(b.time < 10, '궁극기가 발동해야 함'); }
+  return { b, self, target };
 }
 {
-  // A target standing inside the spin radius is hit repeatedly, spaced by the hit gap.
-  const b = setup(), [self, target] = b.fighters, p = self.skills[0].params;
-  Object.assign(self, { x: 360, y: 360, vx: 0, vy: 0, speed: 0.0001 });
-  Object.assign(target, { x: 360 + p.ultRange * .7, y: 360, vx: 0, vy: 0, speed: 0.0001 });
-  types.nose.ultimate.cast(b.api, self, target, p);
-  const hp = target.hp; let hits = 0, prev = hp; const dirs = []; let sparks = 0;
-  for (let i = 0; i < 120 * 2.7; i++) {
-    Object.assign(target, { x: 360 + p.ultRange * .7, y: 360 });
-    step(b); if (target.hp < prev) { hits++; const e = b.effects.find(e => e.mode === 'spin'); dirs.push(e.dir); sparks = Math.max(sparks, e.sparks.length); assert.ok(e.pops.length >= 1 && e.stop > 0, '맞는 순간 히트스톱과 글자 연출'); assert.equal(prev - target.hp, p.ultDamage); prev = target.hp; }
+  // Full gauge fires the ultimate as a scene: the fight freezes, fixed hits land, then it resumes.
+  const { b, self, target } = ultimate();
+  assert.equal(self.ult, 0, '발동하면 게이지 초기화');
+  assert.ok(b.events[0].text.includes('궁극기 코 분쇄기'));
+  assert.equal(b.cutscene.slot, 0); assert.equal(b.cutscene.name, '코 분쇄기');
+  const hp = target.hp, total = self.skills[0].params.ultTotal;
+  const snapshot = () => JSON.stringify([b.time, b.fighters.map(f => [f.x, f.y, f.vx, f.vy, f.shield]), b.fighters.map(f => f.skills.map(s => s.remaining)), b.effects.map(e => e.age)]);
+  const frozen = snapshot(); const drops = []; let frames = 0, grinderFrames = 0;
+  while (b.cutscene) {
+    const before = target.hp; step(b); frames++;
+    if (target.hp < before) drops.push([+(frames / 120).toFixed(3), before - target.hp, b.audioEvents.map(e => e.type)]);
+    assert.equal(self.ult, 0, '연출 중 게이지 안 참');
   }
-  assert.ok(hits >= 4 && hits <= 9, `여러 번 적중 (${hits})`);
-  assert.ok(dirs.every((d, i) => i === 0 || d === -dirs[i - 1]), '맞을 때마다 회전 방향이 반대로 바뀜');
-  assert.equal(dirs[0], -1, '첫 적중 후 반대 방향');
-  assert.ok(sparks >= 16, '맞으면 파티클이 튐');
+  assert.equal(snapshot(), frozen, '연출 동안 싸움이 완전히 멈춤 (위치·시간·쿨타임·효과)');
+  assert.ok(Math.abs(frames / 120 - scene.duration) < .02, '연출 길이');
+  assert.equal(drops.length, scene.hits.length, '정해진 횟수만큼 맞음');
+  drops.forEach(([t], i) => assert.ok(Math.abs(t - scene.hits[i]) < .01, '정해진 시점에 맞음'));
+  assert.ok(drops.every(d => d[2].includes('spinHit')), '맞을 때마다 타격음');
+  assert.ok(Math.abs(hp - target.hp - total) < 1e-9, '항상 같은 총 피해');
+  step(b); assert.ok(b.time > 0 && !b.cutscene, '연출이 끝나면 싸움 재개');
+}
+{
+  // Same damage no matter how far away the opponent is or how much shield it has.
+  const far = ultimate((b, self, target) => { Object.assign(self, { x: 60, y: 60 }); Object.assign(target, { x: 660, y: 660, shield: 999, shieldTime: 99, damageReduction: .9 }); });
+  const hp = far.target.hp; while (far.b.cutscene) step(far.b);
+  assert.ok(Math.abs(hp - far.target.hp - far.self.skills[0].params.ultTotal) < 1e-9, '거리·보호막·피해감소 무시');
+  assert.equal(far.target.shield, 999, '보호막은 소모되지 않음');
+}
+{
+  // No gauge gain from walls/bumps while the scene plays, and a lethal ultimate ends the match after it.
+  const { b, self, target } = ultimate(); target.hp = 10;
+  while (b.cutscene) { step(b); assert.equal(self.ult, 0); assert.equal(b.state, 'running'); }
+  step(b); assert.equal(b.state, 'ended'); assert.equal(b.winner, 0, '궁극기로 쓰러뜨리면 승리');
+}
+{
+  // Older saves with the removed spin fields still load; the new total uses its default.
+  const config = copy(ctx.ArenaDefaults), a = copy(ctx.ArenaNosePreset.ability);
+  a.params.ultDamage = 9; a.params.ultRange = 190; config.abilities.push(a);
+  const clean = ctx.ArenaEngine.validate(config, types).abilities.find(x => x.id === a.id);
+  assert.equal(clean.params.ultTotal, 50); assert.equal(clean.params.ultRange, undefined);
 }
 console.log('ultimate ok');
